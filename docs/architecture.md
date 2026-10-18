@@ -18,13 +18,15 @@ The sccache-derived project gates remain a compact layer for recurring review fa
 
 Each finding names exactly one primary rule and may name supporting rules. Unknown rule IDs, malformed severities, empty locations, and confidence below 0.70 are removed before aggregation. Supporting rules never create consensus by themselves.
 
-Model line numbers are treated as hints and snapped to a nearby real added line when possible. Consensus requires distinct models to report the same primary rule in the same file within a small line window. The strongest representative finding supplies the explanation/evidence for the cluster.
+Model line numbers are treated as hints and snapped to a nearby real added line when possible. Consensus always requires distinct models. Line-local rules must report the same primary rule in the same file within a small line window. Relational `helper-complete-migration` findings may agree across hunks only when both models provide the same normalized `subject`: an exact source identifier/path copied from the diff, such as the new helper name. Different subjects never merge merely because they share a rule and file. Repeat samples from one model cannot create additional model votes. The strongest representative finding supplies the explanation/evidence for the cluster.
 
 A `block` or `major` consensus finding fails the check after the review is posted. Clean PRs receive no noisy approval comment. Provider/model failures are isolated; the run fails as infrastructure only when successful reviewers fall below the configured vote threshold.
 
 ## Model profiles
 
 The default reviewers are GLM 5.3 Flash, Muse Spark 1.3 Contributor, and GPT Luna Latest. Luna runs without hidden reasoning because this task is faster and reliable that way. GLM and Muse require reasoning, so they run at low effort with a larger completion envelope. Responses are requested in JSON mode and validated locally.
+
+Production uses three samples/model at temperature 0.20. The first sample completes before the focused samples start so provider prompt caching/sticky routing can warm. Later samples keep the system message and full diff/rules user message byte-for-byte stable and append a small second user message selecting a different review lens. The stable OpenRouter `session_id` is derived from model + base prompt. Response caching is not used because independent samples must produce fresh generations. Sampling is capped at 16.
 
 ## Bounded scope
 

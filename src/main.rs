@@ -27,6 +27,8 @@ enum Command {
         models: Vec<String>,
         #[arg(long, default_value_t = 0.10)]
         temperature: f32,
+        #[arg(long, default_value_t = 1)]
+        samples: usize,
     },
     Preflight {
         #[arg(long)]
@@ -41,6 +43,8 @@ enum Command {
         temperature: f32,
         #[arg(long)]
         output: Option<PathBuf>,
+        #[arg(long, default_value_t = 1)]
+        samples: usize,
     },
     Github {
         #[arg(long)]
@@ -55,6 +59,8 @@ enum Command {
         temperature: f32,
         #[arg(long)]
         dry_run: bool,
+        #[arg(long, default_value_t = 1)]
+        samples: usize,
     },
 }
 
@@ -66,14 +72,16 @@ async fn main() -> Result<()> {
             diff,
             models,
             temperature,
-        } => review::run(&diff, &models, temperature).await,
+            samples,
+        } => review::run(&diff, &models, temperature, samples).await,
         Command::Preflight { diff } => review::preflight(&diff),
         Command::Bench {
             fixtures,
             models,
             temperature,
             output,
-        } => bench::run(&fixtures, &models, temperature, output.as_deref()).await,
+            samples,
+        } => bench::run(&fixtures, &models, temperature, output.as_deref(), samples).await,
         Command::Github {
             repo,
             pull,
@@ -81,6 +89,18 @@ async fn main() -> Result<()> {
             min_votes,
             temperature,
             dry_run,
-        } => github::run(&repo, pull, &models, min_votes, temperature, dry_run).await,
+            samples,
+        } => {
+            github::run(
+                &repo,
+                pull,
+                &models,
+                min_votes,
+                temperature,
+                dry_run,
+                samples,
+            )
+            .await
+        }
     }
 }

@@ -2,6 +2,7 @@ use std::{
     collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
+    time::Instant,
 };
 
 use anyhow::{Context, Result};
@@ -9,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     diff::ParsedDiff,
-    model::{Finding, ModelClient},
+    model::{Finding, MAX_SAMPLES, ModelClient},
     review::{build_prompt, scan_added_lines},
 };
 
@@ -28,11 +29,16 @@ struct FixtureScore {
     true_positive_rules: usize,
     missed_rules: usize,
     false_positive_rules: usize,
-    verdict: String,
+    aggregated_verdict: String,
     findings: usize,
     anchored_findings: usize,
     findings_detail: Vec<Finding>,
     cost: Option<f64>,
+    successful_samples: usize,
+    sample_errors: Vec<String>,
+    prompt_tokens: u64,
+    cached_prompt_tokens: u64,
+    cache_write_tokens: u64,
     elapsed_ms: u64,
 }
 
@@ -45,6 +51,9 @@ struct ModelScore {
     clean_false_positive_findings: usize,
     total_findings: usize,
     total_cost: f64,
+    total_prompt_tokens: u64,
+    total_cached_prompt_tokens: u64,
+    total_sample_errors: usize,
     errors: Vec<String>,
 }
 
@@ -53,7 +62,11 @@ pub async fn run(
     models: &[String],
     temperature: f32,
     output: Option<&Path>,
+    samples: usize,
 ) -> Result<()> {
+    if !(1..=MAX_SAMPLES).contains(&samples) {
+        anyhow::bail!("samples must be between 1 and {MAX_SAMPLES}");
+    }
     let fixtures = load_fixtures(fixtures_dir)?;
     let client = ModelClient::from_env()?;
     let mut model_scores = Vec::new();
@@ -64,7 +77,7 @@ pub async fn run(
         let mut errors = Vec::new();
 
         for fixture in &fixtures {
-            match run_fixture(&client, model, fixture, temperature).await {
+            match run_fixture(&client, model, fixture, temperature, samples).await {
                 Ok(score) => scores.push(score),
                 Err(error) => errors.push(format!("{}: {error:#}", fixture.name)),
             }
@@ -89,6 +102,10 @@ pub async fn run(
             .map(|score| score.findings)
             .sum();
         let total_cost = scores.iter().filter_map(|score| score.cost).sum();
+        let total_prompt_tokens = scores.iter().map(|score| score.prompt_tokens).sum();
+        let total_cached_prompt_tokens =
+            scores.iter().map(|score| score.cached_prompt_tokens).sum();
+        let total_sample_errors = scores.iter().map(|score| score.sample_errors.len()).sum();
 
         model_scores.push(ModelScore {
             model: model.clone(),
@@ -98,6 +115,9 @@ pub async fn run(
             clean_false_positive_findings,
             total_findings,
             total_cost,
+            total_prompt_tokens,
+            total_cached_prompt_tokens,
+            total_sample_errors,
             errors,
         });
     }
@@ -119,18 +139,37 @@ async fn run_fixture(
     model: &str,
     fixture: &GroundTruth,
     temperature: f32,
+    samples: usize,
 ) -> Result<FixtureScore> {
     let diff_path = PathBuf::from(&fixture.diff);
     let text = fs::read_to_string(&diff_path)
         .with_context(|| format!("read fixture diff {}", diff_path.display()))?;
     let parsed = ParsedDiff::parse(&text);
     let prompt = build_prompt(&parsed, &scan_added_lines(&parsed.added_lines))?;
-    let run = client.review(model, &prompt, temperature).await?;
+    let started = Instant::now();
+    let outcomes = client
+        .review_samples(model, &prompt, temperature, samples)
+        .await;
 
-    let found_rules: BTreeSet<String> = run
-        .review
-        .findings
+    let mut runs = Vec::with_capacity(samples);
+    let mut sample_errors = Vec::new();
+    for (sample, outcome) in outcomes {
+        match outcome {
+            Ok(run) => runs.push(run),
+            Err(error) => {
+                let label =
+                    sample.map_or_else(|| "unknown".to_owned(), |sample| (sample + 1).to_string());
+                sample_errors.push(format!("sample {label}: {error:#}"));
+            }
+        }
+    }
+    if runs.is_empty() {
+        anyhow::bail!("all {samples} samples failed: {}", sample_errors.join("; "));
+    }
+
+    let found_rules: BTreeSet<String> = runs
         .iter()
+        .flat_map(|run| &run.review.findings)
         .flat_map(|finding| {
             std::iter::once(finding.rule.clone()).chain(finding.supporting_rules.iter().cloned())
         })
@@ -141,9 +180,11 @@ async fn run_fixture(
     let missed_rules = expected.difference(&found_rules).count();
     let false_positive_rules = found_rules.difference(&expected).count();
 
-    let anchored_findings = run
-        .review
-        .findings
+    let findings_detail: Vec<Finding> = runs
+        .iter()
+        .flat_map(|run| run.review.findings.iter().cloned())
+        .collect();
+    let anchored_findings = findings_detail
         .iter()
         .filter(|finding| {
             parsed
@@ -152,7 +193,21 @@ async fn run_fixture(
                 .any(|line| line.file == finding.file && line.line == finding.line)
         })
         .count();
-    let findings = run.review.findings;
+    let aggregated_verdict = if findings_detail
+        .iter()
+        .any(|finding| matches!(finding.severity.as_str(), "block" | "major"))
+    {
+        "block"
+    } else if findings_detail.is_empty() {
+        "pass"
+    } else {
+        "comment"
+    };
+    let costs: Vec<f64> = runs.iter().filter_map(|run| run.cost).collect();
+    let cost = (!costs.is_empty()).then(|| costs.into_iter().sum());
+    let prompt_tokens = runs.iter().filter_map(|run| run.prompt_tokens).sum();
+    let cached_prompt_tokens = runs.iter().filter_map(|run| run.cached_prompt_tokens).sum();
+    let cache_write_tokens = runs.iter().filter_map(|run| run.cache_write_tokens).sum();
 
     Ok(FixtureScore {
         fixture: fixture.name.clone(),
@@ -161,12 +216,17 @@ async fn run_fixture(
         true_positive_rules,
         missed_rules,
         false_positive_rules,
-        verdict: run.review.verdict,
-        findings: findings.len(),
+        aggregated_verdict: aggregated_verdict.to_owned(),
+        findings: findings_detail.len(),
         anchored_findings,
-        findings_detail: findings,
-        cost: run.cost,
-        elapsed_ms: run.elapsed_ms,
+        findings_detail,
+        cost,
+        successful_samples: runs.len(),
+        sample_errors,
+        prompt_tokens,
+        cached_prompt_tokens,
+        cache_write_tokens,
+        elapsed_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
     })
 }
 

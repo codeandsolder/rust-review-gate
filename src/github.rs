@@ -16,6 +16,7 @@ pub async fn run(
     min_votes: usize,
     temperature: f32,
     dry_run: bool,
+    samples: usize,
 ) -> Result<()> {
     validate_repo(repo)?;
     if min_votes == 0 || min_votes > models.len() {
@@ -29,17 +30,17 @@ pub async fn run(
     let head_sha = github.pull_head_sha(repo, pull_number).await?;
     let diff = github.pull_diff(repo, pull_number).await?;
     let parsed = ParsedDiff::parse(&diff);
-    let output = review::review_text(&diff, models, temperature, min_votes).await?;
-    if output.runs.len() < min_votes {
+    let output = review::review_text(&diff, models, temperature, min_votes, samples).await?;
+    let successful_models = review::successful_model_count(&output.runs);
+    if successful_models < min_votes {
         let failed = output
             .failures
             .iter()
-            .map(|failure| failure.model.as_str())
+            .map(failure_label)
             .collect::<Vec<_>>()
             .join(", ");
         return Err(anyhow!(
-            "only {} reviewer(s) succeeded, below min-votes {min_votes}; failed models: {failed}",
-            output.runs.len()
+            "only {successful_models} distinct reviewer model(s) succeeded, below min-votes {min_votes}; failed samples: {failed}"
         ));
     }
     let current_head_sha = github.pull_head_sha(repo, pull_number).await?;
@@ -102,9 +103,11 @@ fn build_review_payload(
         .iter()
         .filter(|finding| matches!(finding.severity.as_str(), "block" | "major"))
         .count();
+    let successful_models = review::successful_model_count(&output.runs);
     let mut body = format!(
-        "rust-review-gate: {} consensus finding(s) from {} successful reviewer(s); {} blocking/major.",
+        "rust-review-gate: {} consensus finding(s) from {} successful model(s), {} successful sample(s); {} blocking/major.",
         output.consensus.len(),
+        successful_models,
         output.runs.len(),
         blocking
     );
@@ -114,7 +117,7 @@ fn build_review_payload(
             writeln!(
                 &mut body,
                 "- `{}` unavailable; excluded from consensus",
-                failure.model
+                failure_label(failure)
             )?;
         }
     }
@@ -135,10 +138,22 @@ fn build_review_payload(
     Ok((payload, blocking))
 }
 
+fn failure_label(failure: &review::ModelFailure) -> String {
+    failure.sample.map_or_else(
+        || format!("{}#unknown-sample", failure.model),
+        |sample| format!("{}#{}", failure.model, sample + 1),
+    )
+}
+
 fn format_finding(finding: &crate::aggregate::ConsensusFinding) -> String {
     let mut body = format!(
-        "**{}** (`{}`, {} votes)\n\n{}\n\nEvidence: {}",
-        finding.title, finding.rule, finding.votes, finding.explanation, finding.evidence
+        "**{}** (`{}`, {} model votes / {} sample hits)\n\n{}\n\nEvidence: {}",
+        finding.title,
+        finding.rule,
+        finding.votes,
+        finding.sample_votes,
+        finding.explanation,
+        finding.evidence
     );
     if let Some(test) = &finding.suggested_test {
         body.push_str("\n\nSuggested regression test: ");

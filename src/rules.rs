@@ -26,6 +26,8 @@ struct RustSkillRule {
     summary: String,
 }
 
+pub const HELPER_COMPLETE_MIGRATION_RULE: &str = "helper-complete-migration";
+
 pub const REVIEW_RULES: &[ReviewRule] = &[
     ReviewRule {
         id: "invariant-owner",
@@ -40,7 +42,7 @@ pub const REVIEW_RULES: &[ReviewRule] = &[
         summary: "Audit the error representation actually displayed or logged; preserving only the source chain is insufficient when callers render Display.",
     },
     ReviewRule {
-        id: "helper-complete-migration",
+        id: HELPER_COMPLETE_MIGRATION_RULE,
         summary: "A new helper should own all equivalent sibling paths in its abstraction or remain local; partial migrations leave divergent behavior.",
     },
     ReviewRule {

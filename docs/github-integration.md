@@ -12,8 +12,8 @@ If `workflow_run.pull_requests` is empty, the job is skipped rather than guessin
 
 ## Review posting
 
-Three independent reviewers run concurrently. Findings are normalized onto actual added lines and aggregated only by their primary rule. Two distinct models must agree on primary rule, file, and nearby line before the bot posts an inline consensus finding.
+Three independent reviewer models run concurrently. Each model currently gets three samples: one general pass followed by two focused passes that reuse the exact large base prompt and add only a tiny review-lens message. Repeat samples can increase one model's coverage but never its vote weight. Findings are normalized onto actual added lines and aggregated only by their primary rule. Two distinct models must agree before the bot posts a consensus finding. Line-local rules require nearby anchors. A relational `helper-complete-migration` finding can match across sibling hunks only when both models name the same exact source `subject` identifier, so unrelated migrations in one file cannot manufacture consensus.
 
 Findings that cannot be safely positioned remain summary-only. `block` and `major` consensus findings make the workflow fail after the review is posted. If no finding reaches consensus, the workflow succeeds without posting a “looks good” comment.
 
-A provider failure is listed in the review summary only when another consensus finding causes a review to be posted. If fewer reviewers succeed than the vote threshold, the job fails as infrastructure and does not pretend the PR is clean.
+A provider/sample failure is listed in the review summary only when another consensus finding causes a review to be posted. The infrastructure quorum counts distinct models with at least one successful sample, never raw sample count. If fewer models succeed than the vote threshold, the job fails as infrastructure and does not pretend the PR is clean.
