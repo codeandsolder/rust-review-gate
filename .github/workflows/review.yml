@@ -1,0 +1,52 @@
+name: Rust review gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GITHUB_TOKEN: ${{ github.token }}
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+      CARGO_TARGET_DIR: ${{ runner.temp }}/rust-review-gate-target
+
+    steps:
+      # Deliberately use the trusted base revision. PR code is fetched only as
+      # text by the reviewer and is never executed in this secret-bearing job.
+      - name: Check out trusted reviewer
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Install Rust 1.99
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+
+      - name: Configure sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Build trusted reviewer
+        run: cargo +1.99.0 build --release --locked
+
+      - name: Review pull request
+        run: >-
+          "$CARGO_TARGET_DIR/release/rust-review-gate" github
+          --repo "${{ github.repository }}"
+          --pull "${{ github.event.pull_request.number }}"
+          --min-votes 2
+          --model 'poolside/laguna-s-2.1:free'
+          --model 'z-ai/glm-5.3-flash'
+          --model '~openai/gpt-luna-latest'

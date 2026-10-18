@@ -57,6 +57,16 @@ impl ParsedDiff {
             added_lines,
         }
     }
+
+    #[must_use]
+    pub fn nearest_added_line(&self, file: &str, target: u32, max_distance: u32) -> Option<u32> {
+        self.added_lines
+            .iter()
+            .filter(|line| line.file == file)
+            .map(|line| line.line)
+            .filter(|line| line.abs_diff(target) <= max_distance)
+            .min_by_key(|line| line.abs_diff(target))
+    }
 }
 
 fn parse_hunk_new_start(line: &str) -> Option<u32> {
@@ -75,5 +85,7 @@ mod tests {
         assert_eq!(parsed.added_lines.len(), 1);
         assert_eq!(parsed.added_lines[0].line, 11);
         assert_eq!(parsed.added_lines[0].text, "new");
+        assert_eq!(parsed.nearest_added_line("src/lib.rs", 12, 2), Some(11));
+        assert_eq!(parsed.nearest_added_line("src/lib.rs", 20, 2), None);
     }
 }

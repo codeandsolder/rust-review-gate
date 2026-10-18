@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     diff::ParsedDiff,
-    model::ModelClient,
+    model::{Finding, ModelClient},
     review::{build_prompt, scan_added_lines},
 };
 
@@ -30,7 +30,10 @@ struct FixtureScore {
     false_positive_rules: usize,
     verdict: String,
     findings: usize,
+    anchored_findings: usize,
+    findings_detail: Vec<Finding>,
     cost: Option<f64>,
+    elapsed_ms: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -136,6 +139,19 @@ async fn run_fixture(
     let missed_rules = expected.difference(&found_rules).count();
     let false_positive_rules = found_rules.difference(&expected).count();
 
+    let anchored_findings = run
+        .review
+        .findings
+        .iter()
+        .filter(|finding| {
+            parsed
+                .added_lines
+                .iter()
+                .any(|line| line.file == finding.file && line.line == finding.line)
+        })
+        .count();
+    let findings = run.review.findings;
+
     Ok(FixtureScore {
         fixture: fixture.name.clone(),
         expected_rules: expected.into_iter().collect(),
@@ -144,8 +160,11 @@ async fn run_fixture(
         missed_rules,
         false_positive_rules,
         verdict: run.review.verdict,
-        findings: run.review.findings.len(),
+        findings: findings.len(),
+        anchored_findings,
+        findings_detail: findings,
         cost: run.cost,
+        elapsed_ms: run.elapsed_ms,
     })
 }
 

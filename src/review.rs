@@ -4,8 +4,9 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::{
+    aggregate::{self, ConsensusFinding},
     diff::{AddedLine, ParsedDiff},
-    model::ModelClient,
+    model::{ModelClient, ModelRun},
     rules,
 };
 
@@ -19,10 +20,28 @@ pub struct PreflightLead {
     pub text: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ReviewOutput {
+    pub runs: Vec<ModelRun>,
+    pub consensus: Vec<ConsensusFinding>,
+}
+
 pub async fn run(diff_path: &Path, models: &[String], temperature: f32) -> Result<()> {
     let text = fs::read_to_string(diff_path)
         .with_context(|| format!("read diff {}", diff_path.display()))?;
-    let parsed = ParsedDiff::parse(&text);
+    let min_votes = if models.len() > 1 { 2 } else { 1 };
+    let output = review_text(&text, models, temperature, min_votes).await?;
+    println!("{}", serde_json::to_string_pretty(&output)?);
+    Ok(())
+}
+
+pub async fn review_text(
+    text: &str,
+    models: &[String],
+    temperature: f32,
+    min_votes: usize,
+) -> Result<ReviewOutput> {
+    let parsed = ParsedDiff::parse(text);
     let leads = scan_added_lines(&parsed.added_lines);
     let prompt = build_prompt(&parsed, &leads)?;
     let client = ModelClient::from_env()?;
@@ -30,10 +49,16 @@ pub async fn run(diff_path: &Path, models: &[String], temperature: f32) -> Resul
     let mut runs = Vec::with_capacity(models.len());
     for model in models {
         eprintln!("reviewing with {model}");
-        runs.push(client.review(model, &prompt, temperature).await?);
+        let mut run = client.review(model, &prompt, temperature).await?;
+        for finding in &mut run.review.findings {
+            if let Some(line) = parsed.nearest_added_line(&finding.file, finding.line, 4) {
+                finding.line = line;
+            }
+        }
+        runs.push(run);
     }
-    println!("{}", serde_json::to_string_pretty(&runs)?);
-    Ok(())
+    let consensus = aggregate::consensus(&runs, min_votes, 4);
+    Ok(ReviewOutput { runs, consensus })
 }
 
 pub fn preflight(diff_path: &Path) -> Result<()> {

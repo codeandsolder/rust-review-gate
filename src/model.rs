@@ -1,4 +1,7 @@
-use std::{env, time::Duration};
+use std::{
+    env,
+    time::{Duration, Instant},
+};
 
 use anyhow::{Context, Result, anyhow};
 use reqwest::StatusCode;
@@ -34,6 +37,7 @@ pub struct ModelRun {
     pub prompt_tokens: Option<u64>,
     pub completion_tokens: Option<u64>,
     pub cost: Option<f64>,
+    pub elapsed_ms: u64,
 }
 
 pub struct ModelClient {
@@ -45,7 +49,7 @@ impl ModelClient {
     pub fn from_env() -> Result<Self> {
         let api_key = env::var("OPENROUTER_API_KEY").context("OPENROUTER_API_KEY is not set")?;
         let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(90))
+            .timeout(Duration::from_secs(180))
             .user_agent("rust-review-gate/0.1")
             .build()?;
         Ok(Self { http, api_key })
@@ -59,9 +63,11 @@ impl ModelClient {
                 {"role": "user", "content": prompt}
             ],
             "temperature": temperature,
-            "max_tokens": 3200
+            "max_tokens": 1600,
+            "reasoning": {"effort": "low"}
         });
 
+        let started = Instant::now();
         let mut delay = Duration::from_secs(2);
         for attempt in 0..3 {
             let response = self
@@ -92,7 +98,19 @@ impl ModelClient {
             let content = value
                 .pointer("/choices/0/message/content")
                 .and_then(serde_json::Value::as_str)
-                .context("response missing choices[0].message.content")?;
+                .ok_or_else(|| {
+                    let finish_reason = value
+                        .pointer("/choices/0/finish_reason")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("unknown");
+                    let reasoning_chars = value
+                        .pointer("/choices/0/message/reasoning")
+                        .and_then(serde_json::Value::as_str)
+                        .map_or(0, str::len);
+                    anyhow!(
+                        "response missing choices[0].message.content (finish_reason={finish_reason}, reasoning_chars={reasoning_chars})"
+                    )
+                })?;
             let review = parse_review(content)
                 .with_context(|| format!("parse structured review from {model}: {content}"))?;
             let usage = value.get("usage");
@@ -108,6 +126,7 @@ impl ModelClient {
                 cost: usage
                     .and_then(|v| v.get("cost"))
                     .and_then(serde_json::Value::as_f64),
+                elapsed_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
             });
         }
         Err(anyhow!("OpenRouter retry loop exhausted for {model}"))
