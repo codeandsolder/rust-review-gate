@@ -1,0 +1,28 @@
+diff --git a/src/cache.rs b/src/cache.rs
+--- a/src/cache.rs
++++ b/src/cache.rs
+@@ -41,10 +41,13 @@ async fn put(&self, key: &str, value: &[u8]) -> Result<()> {
+-    if let Err(err) = self.check_capability().await {
+-        tracing::debug!(?err, "capability probe failed; attempting write anyway");
+-    }
++    self.check_capability()
++        .await
++        .context("capability probe failed")?;
+ 
+     self.backend
+         .put(key, value)
+         .await
+         .context("cache write failed")?;
+     Ok(())
+ }
+diff --git a/src/cache_test.rs b/src/cache_test.rs
+--- a/src/cache_test.rs
++++ b/src/cache_test.rs
+@@ -22,3 +22,7 @@ async fn writes_when_probe_succeeds() {
+     assert_eq!(backend.writes(), 1);
+ }
++
++#[tokio::test]
++async fn reports_probe_failure() {
++    assert!(cache_with_failed_probe().put("k", b"v").await.is_err());
++}

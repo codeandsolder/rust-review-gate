@@ -1,0 +1,10 @@
+diff --git a/src/mode.rs b/src/mode.rs
+--- a/src/mode.rs
++++ b/src/mode.rs
+@@ -8,7 +8,10 @@ fn label(mode: Mode) -> &'static str {
+-    if mode == Mode::Read { "read" } else { "write" }
++    match mode {
++        Mode::Read => "read",
++        Mode::Write => "write",
++    }
+ }

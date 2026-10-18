@@ -1,0 +1,25 @@
+diff --git a/src/server.rs b/src/server.rs
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -12,12 +12,27 @@ struct Service {
+     storage: Storage,
++    effective_mode: Option<CacheMode>,
+ }
+ 
+ impl Service {
+-    fn new(storage: Storage, mode: CacheMode) -> Self {
+-        Self { storage, mode }
++    fn new(storage: Storage) -> Self {
++        Self { storage, effective_mode: None }
++    }
++
++    fn new_with_mode(storage: Storage, mode: CacheMode) -> Self {
++        Self { storage, effective_mode: Some(mode) }
+     }
+ 
+     fn mode(&self) -> CacheMode {
+-        self.mode
++        self.effective_mode
++            .unwrap_or_else(|| self.storage.check().mode())
+     }
+ }

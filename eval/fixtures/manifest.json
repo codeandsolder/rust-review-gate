@@ -1,0 +1,8 @@
+[
+  {"name":"failed-probe-write-semantics","diff":"failed_probe.diff","expected_rules":["failure-path-semantics","boundary-tests"]},
+  {"name":"displayed-error-cause-loss","diff":"display_error.diff","expected_rules":["displayed-error"]},
+  {"name":"internal-compatibility-machinery","diff":"internal_compat.diff","expected_rules":["internal-compatibility"]},
+  {"name":"partial-helper-migration","diff":"partial_helper.diff","expected_rules":["helper-complete-migration"]},
+  {"name":"lock-across-await","diff":"lock_await.diff","expected_rules":["no-lock-across-await"]},
+  {"name":"clean-explicit-match-refactor","diff":"clean.diff","expected_rules":[]}
+]

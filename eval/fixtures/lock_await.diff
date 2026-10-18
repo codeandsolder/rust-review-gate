@@ -1,0 +1,15 @@
+diff --git a/src/worker.rs b/src/worker.rs
+--- a/src/worker.rs
++++ b/src/worker.rs
+@@ -31,8 +31,11 @@ async fn refresh(&self) -> Result<()> {
+-    let snapshot = self.state.lock().map_err(lock_error)?.clone();
+-    let new_state = self.client.fetch(snapshot.version).await?;
+-    *self.state.lock().map_err(lock_error)? = new_state;
++    let mut state = self.state.lock().map_err(lock_error)?;
++    let new_state = self
++        .client
++        .fetch(state.version)
++        .await?;
++    *state = new_state;
+     Ok(())
+ }

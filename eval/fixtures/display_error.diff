@@ -1,0 +1,17 @@
+diff --git a/src/storage.rs b/src/storage.rs
+--- a/src/storage.rs
++++ b/src/storage.rs
+@@ -17,7 +17,9 @@ async fn write_blob(&self, data: &[u8]) -> anyhow::Result<()> {
+-    self.backend.write(data).await.map_err(|err| anyhow::anyhow!("write blob failed: {err}"))?;
++    self.backend
++        .write(data)
++        .await
++        .context("write blob failed")?;
+     Ok(())
+ }
+@@ -38,5 +40,5 @@ async fn worker(&self) {
+     if let Err(err) = self.write_blob(&payload).await {
+-        tracing::error!("storage error: {err:#}");
++        tracing::error!("storage error: {err}");
+     }
+ }

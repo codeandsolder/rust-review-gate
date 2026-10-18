@@ -1,0 +1,25 @@
+diff --git a/src/stats.rs b/src/stats.rs
+--- a/src/stats.rs
++++ b/src/stats.rs
+@@ -5,6 +5,13 @@ struct LevelStats {
+     errors: AtomicU64,
+ }
+ 
++fn record_write_result(stats: &LevelStats, result: &io::Result<()>) {
++    if result.is_ok() { stats.writes.fetch_add(1, Ordering::Relaxed); }
++    else { stats.errors.fetch_add(1, Ordering::Relaxed); }
++}
++
+ async fn write_l0(&self, value: &[u8]) -> io::Result<()> {
+     let result = self.l0.write(value).await;
+-    if result.is_ok() { self.l0_stats.writes.fetch_add(1, Ordering::Relaxed); }
+-    else { self.l0_stats.errors.fetch_add(1, Ordering::Relaxed); }
++    record_write_result(&self.l0_stats, &result);
+     result
+ }
+@@ -25,8 +32,8 @@ async fn write_slow(&self, value: &[u8]) -> io::Result<()> {
+     let result = self.slow.write(value).await;
+     if result.is_ok() { self.slow_stats.writes.fetch_add(1, Ordering::Relaxed); }
+     else { self.slow_stats.errors.fetch_add(1, Ordering::Relaxed); }
+     result
+ }
