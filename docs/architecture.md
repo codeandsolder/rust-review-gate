@@ -1,24 +1,31 @@
 # Architecture
 
-## Security boundary
+## Trust boundary
 
-The model-review process receives text only: unified diff, deterministic leads, and named review rules. It does not receive shell tools and never executes PR code.
+The reviewer handles pull-request content strictly as data. Its model process receives only a unified diff, deterministic leads, and named review rules. It has no shell/filesystem tools and never executes code from the PR.
 
-Compilation, tests, Clippy, Miri, or project-specific validation belong in separate CI jobs without `OPENROUTER_API_KEY`. Their statuses can later be fed into the reviewer as evidence.
+GitHub uses a two-workflow split. A zero-secret `pull_request` workflow emits a successful signal. A separate `workflow_run` workflow is loaded from the trusted default branch, checks out only trusted code, builds the reviewer, then fetches the target PR diff through GitHub's API. Repository/model credentials exist only on the review step. Setup actions are pinned to immutable commits.
 
-This is deliberate: PR content is attacker-controlled, and a tool-using reviewer with repository secrets would otherwise create a prompt-injection-to-credential-exfiltration path.
+This avoids both common failure modes: a same-repository PR rewriting a secret-bearing `pull_request` workflow, and a privileged workflow checking out attacker-controlled PR code.
 
-## Review lenses
+## Rule application
 
-The stable machine-facing rule IDs are distilled from the current rust-skills2 workflow and recurring sccache maintainer feedback. Deterministic scans are review leads only; a new `unsafe` block or `unwrap` is not automatically a defect without context.
+The project embeds a generated 325-rule rust-skills2 snapshot with its source commit. `own-` and `anti-` are baseline families. Error, test, lint, unsafe, async/concurrency, API/types/traits, memory/performance, numeric, serde, pattern, macro, naming, collection, const, docs, observability, and project-structure families are selected from changed text and paths.
 
-The reviewer must identify a triggering condition, consequence, and specific evidence, and abstain below the confidence threshold.
+The sccache-derived project gates remain a compact layer for recurring review failures that generic guidance does not capture well: invariant ownership, failure-path behavior, actual displayed error information, complete helper migration, internal-only compatibility machinery, state/boundary regressions, and scope discipline.
 
-## Planned production gate
+## Finding contract and consensus
 
-Two stages:
+Each finding names exactly one primary rule and may name supporting rules. Unknown rule IDs, malformed severities, empty locations, and confidence below 0.70 are removed before aggregation. Supporting rules never create consensus by themselves.
 
-1. broad cheap candidate generation by one or more fast models;
-2. validation/deduplication of candidate findings, requiring either model agreement or a verifier decision before a blocking conclusion.
+Model line numbers are treated as hints and snapped to a nearby real added line when possible. Consensus requires distinct models to report the same primary rule in the same file within a small line window. The strongest representative finding supplies the explanation/evidence for the cluster.
 
-The eval corpus selects models and thresholds empirically rather than by reputation.
+A `block` or `major` consensus finding fails the check after the review is posted. Clean PRs receive no noisy approval comment. Provider/model failures are isolated; the run fails as infrastructure only when successful reviewers fall below the configured vote threshold.
+
+## Model profiles
+
+The default reviewers are GLM 5.3 Flash, Muse Spark 1.3 Contributor, and GPT Luna Latest. Luna runs without hidden reasoning because this task is faster and reliable that way. GLM and Muse require reasoning, so they run at low effort with a larger completion envelope. Responses are requested in JSON mode and validated locally.
+
+## Bounded scope
+
+The MVP refuses diffs above 220 kB rather than silently truncating them. Deterministic file/hunk chunking is the next extension for larger PRs. Build/test/Clippy/Miri remain separate credential-free checks; their statuses can later become trusted evidence for the reviewer without widening the model's execution boundary.

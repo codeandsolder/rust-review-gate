@@ -1,4 +1,4 @@
-use std::{env, time::Duration};
+use std::{env, fmt::Write as _, time::Duration};
 
 use anyhow::{Context, Result, anyhow};
 use reqwest::{Client, StatusCode, header};
@@ -26,11 +26,55 @@ pub async fn run(
     }
 
     let github = GithubClient::from_env()?;
+    let head_sha = github.pull_head_sha(repo, pull_number).await?;
     let diff = github.pull_diff(repo, pull_number).await?;
     let parsed = ParsedDiff::parse(&diff);
     let output = review::review_text(&diff, models, temperature, min_votes).await?;
-    let head_sha = github.pull_head_sha(repo, pull_number).await?;
+    if output.runs.len() < min_votes {
+        let failed = output
+            .failures
+            .iter()
+            .map(|failure| failure.model.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(anyhow!(
+            "only {} reviewer(s) succeeded, below min-votes {min_votes}; failed models: {failed}",
+            output.runs.len()
+        ));
+    }
+    let current_head_sha = github.pull_head_sha(repo, pull_number).await?;
+    if current_head_sha != head_sha {
+        return Err(anyhow!(
+            "pull-request head changed during review ({head_sha} -> {current_head_sha}); discarding stale findings"
+        ));
+    }
 
+    let (payload, blocking) = build_review_payload(&output, &parsed, &head_sha)?;
+
+    if dry_run {
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else if !output.consensus.is_empty() {
+        github
+            .post_review(repo, pull_number, &payload)
+            .await
+            .context("post GitHub pull-request review")?;
+    } else {
+        eprintln!("no consensus findings; skipping empty PR comment");
+    }
+
+    if blocking > 0 {
+        return Err(anyhow!(
+            "{blocking} blocking/major consensus finding(s) remain"
+        ));
+    }
+    Ok(())
+}
+
+fn build_review_payload(
+    output: &review::ReviewOutput,
+    parsed: &ParsedDiff,
+    head_sha: &str,
+) -> Result<(Value, usize)> {
     let mut inline = Vec::new();
     let mut summary_only = Vec::new();
     for finding in &output.consensus {
@@ -59,13 +103,23 @@ pub async fn run(
         .filter(|finding| matches!(finding.severity.as_str(), "block" | "major"))
         .count();
     let mut body = format!(
-        "rust-review-gate: {} consensus finding(s) from {} model(s); {} blocking/major.",
+        "rust-review-gate: {} consensus finding(s) from {} successful reviewer(s); {} blocking/major.",
         output.consensus.len(),
-        models.len(),
+        output.runs.len(),
         blocking
     );
+    if !output.failures.is_empty() {
+        body.push_str("\n\nReviewer failures (excluded from consensus):\n");
+        for failure in &output.failures {
+            writeln!(
+                &mut body,
+                "- `{}` unavailable; excluded from consensus",
+                failure.model
+            )?;
+        }
+    }
     if !summary_only.is_empty() {
-        body.push_str("\n\nFindings that could not be safely anchored to an added line:\n");
+        body.push_str("\nFindings that could not be safely anchored to an added line:\n");
         body.push_str(&summary_only.join("\n"));
     }
     if output.consensus.is_empty() {
@@ -78,24 +132,7 @@ pub async fn run(
         "body": body,
         "comments": inline,
     });
-
-    if dry_run {
-        println!("{}", serde_json::to_string_pretty(&payload)?);
-    } else if !output.consensus.is_empty() {
-        github
-            .post_review(repo, pull_number, &payload)
-            .await
-            .context("post GitHub pull-request review")?;
-    } else {
-        eprintln!("no consensus findings; skipping empty PR comment");
-    }
-
-    if blocking > 0 {
-        return Err(anyhow!(
-            "{blocking} blocking/major consensus finding(s) remain"
-        ));
-    }
-    Ok(())
+    Ok((payload, blocking))
 }
 
 fn format_finding(finding: &crate::aggregate::ConsensusFinding) -> String {
@@ -134,7 +171,9 @@ struct GithubClient {
 
 impl GithubClient {
     fn from_env() -> Result<Self> {
-        let token = env::var("GITHUB_TOKEN").context("GITHUB_TOKEN is not set")?;
+        let token = env::var("GITHUB_TOKEN")
+            .or_else(|_| env::var("GH_TOKEN"))
+            .context("neither GITHUB_TOKEN nor GH_TOKEN is set")?;
         let http = Client::builder()
             .timeout(Duration::from_secs(45))
             .user_agent("rust-review-gate/0.1")
@@ -150,6 +189,7 @@ impl GithubClient {
             ))
             .bearer_auth(&self.token)
             .header(header::ACCEPT, "application/vnd.github.v3.diff")
+            .header("X-GitHub-Api-Version", "2026-03-10")
             .send()
             .await?;
         self.text_response(response, "fetch pull-request diff")
@@ -173,6 +213,7 @@ impl GithubClient {
             ))
             .bearer_auth(&self.token)
             .header(header::ACCEPT, "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2026-03-10")
             .send()
             .await?;
         let status = response.status();
@@ -190,6 +231,7 @@ impl GithubClient {
             ))
             .bearer_auth(&self.token)
             .header(header::ACCEPT, "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2026-03-10")
             .json(payload)
             .send()
             .await?;

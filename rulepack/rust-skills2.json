@@ -1,0 +1,1957 @@
+{
+  "source_repository": "https://github.com/codeandsolder/rust-skills2",
+  "source_commit": "a80bed67fdccbc68320fba946ba819b05f4269ea",
+  "rule_count": 325,
+  "rules": [
+    {
+      "id": "own-borrow-over-clone",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Borrow when a callee only needs temporary access; clone when the API genuinely needs an independent owned value"
+    },
+    {
+      "id": "own-slice-over-vec",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Accept borrowed views such as `&[T]`, `&str`, and `&Path` when the implementation only needs a view"
+    },
+    {
+      "id": "own-cow-conditional",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Use `Cow<'a, B>` when an API can usually borrow data but sometimes needs an owned value"
+    },
+    {
+      "id": "own-arc-shared",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Use `Arc<T>` when multiple owners may cross thread boundaries; add synchronization only for mutation that actually requires it"
+    },
+    {
+      "id": "own-rc-single-thread",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Use `Rc<T>` for shared ownership that is confined to one thread"
+    },
+    {
+      "id": "own-refcell-interior",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Use `RefCell<T>` when thread-local shared access genuinely needs runtime-checked interior mutability"
+    },
+    {
+      "id": "own-mutex-interior",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Use the right `Mutex<T>` for the execution model: `std`/`parking_lot` for synchronous code, `tokio::sync::Mutex` for async code"
+    },
+    {
+      "id": "own-rwlock-readers",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Choose `RwLock<T>` when concurrent readers materially help the measured workload, not from a fixed read/write ratio"
+    },
+    {
+      "id": "own-copy-small",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Implement `Copy` for small, simple types"
+    },
+    {
+      "id": "own-clone-explicit",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Use `Clone` to make non-`Copy` duplication explicit, but do not infer a universal allocation or cost model from `.clone()`"
+    },
+    {
+      "id": "own-move-large",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Borrow large values when ownership transfer is unnecessary; use indirection when it solves a real layout, location, or ownership problem—not from a fixed byte threshold"
+    },
+    {
+      "id": "own-lifetime-elision",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Rely on ordinary lifetime elision where it applies; treat Edition-2024 RPIT capture as a separate rule"
+    },
+    {
+      "id": "own-cell-update",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Use `Cell::update` (Rust 1.88+) for concise single-threaded read-transform-write updates on `Copy` values"
+    },
+    {
+      "id": "own-cow-rpit-edition2024",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Edition 2024 simplifies RPIT returns whose hidden type borrows; it does not change ordinary `Cow<'_, T>` return elision"
+    },
+    {
+      "id": "own-range-copy",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Use `core::range::Range` (Rust 1.96+) when `Copy` range values are useful; keep `core::ops::Range` for legacy iterator and API interoperability"
+    },
+    {
+      "id": "own-lazy-init",
+      "category": "Ownership & Borrowing",
+      "priority": "CRITICAL",
+      "summary": "Use `LazyLock` for thread-safe lazy statics and `LazyCell` for local or thread-local lazy values; use `OnceLock`/`OnceCell` when initialization is imperative rather than tied to one initializer"
+    },
+    {
+      "id": "err-thiserror-lib",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Use `thiserror` to derive typed library errors when it removes boilerplate without hiding the API"
+    },
+    {
+      "id": "err-anyhow-app",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Use `anyhow` at application boundaries when callers need context and reporting more than a stable typed error API"
+    },
+    {
+      "id": "err-result-over-panic",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Use `Result<T, E>` for fallible operations; encode invariants explicitly and keep deliberate termination at the application boundary"
+    },
+    {
+      "id": "err-context-chain",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Add context at abstraction boundaries so an error says what operation failed as well as why"
+    },
+    {
+      "id": "err-no-unwrap-prod",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Avoid `unwrap()` and `expect()`; preserve failures explicitly and encode invariants in types"
+    },
+    {
+      "id": "err-expect-bugs-only",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Avoid `expect()` even for invariants; encode the invariant, propagate failure, or terminate deliberately at the process boundary"
+    },
+    {
+      "id": "err-question-mark",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Use `?` when a fallible operation should short-circuit through the surrounding error context"
+    },
+    {
+      "id": "err-from-impl",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Implement specific `From<SourceError>` conversions when the conversion is unconditional, unambiguous, and preserves the information callers need"
+    },
+    {
+      "id": "err-source-chain",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Preserve underlying causes in the error source chain"
+    },
+    {
+      "id": "err-lowercase-msg",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Keep `Error` display messages concise, usually lowercase, and usually without trailing punctuation so they compose cleanly"
+    },
+    {
+      "id": "err-doc-errors",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Document meaningful `Err` conditions in a `# Errors` section"
+    },
+    {
+      "id": "err-custom-type",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Define domain error types when callers benefit from knowing what failed"
+    },
+    {
+      "id": "err-clippy-unwrap-types",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Do not use Clippy's `allow-unwrap-types` to punch type-wide holes in a strict no-unwrap/no-expect policy"
+    },
+    {
+      "id": "err-diagnostic-do-not-recommend",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Use `#[diagnostic::do_not_recommend]` on trait impls whose appearance in diagnostics would mislead users"
+    },
+    {
+      "id": "err-expect-not-allow",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Prefer narrow, reasoned `#[expect(...)]` when a suppressible lint reliably fires; use a narrow reasoned `#[allow(...)]` only when lint activation is configuration-dependent and fulfillment semantics cannot work"
+    },
+    {
+      "id": "err-no-std-error",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "Use `core::error::Error` for genuine `no_std` error types; current `thiserror` supports this on Rust 1.81+"
+    },
+    {
+      "id": "err-try-block-experimental",
+      "category": "Error Handling",
+      "priority": "CRITICAL",
+      "summary": "`try {}` blocks remain nightly-only; prefer stable `Result`/`Option` contexts unless the scoped expression is worth the nightly dependency"
+    },
+    {
+      "id": "mem-with-capacity",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Pre-allocate when you have a useful size bound"
+    },
+    {
+      "id": "mem-smallvec",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use `SmallVec` when collections are usually small but may grow"
+    },
+    {
+      "id": "mem-arrayvec",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use `ArrayVec<T, N>` when a hard capacity belongs in the type"
+    },
+    {
+      "id": "mem-box-large-variant",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Consider indirection when one enum variant makes every enum value much larger, but measure the workload before paying for a heap allocation"
+    },
+    {
+      "id": "mem-boxed-slice",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use `Box<[T]>` when owned heap data has a fixed length and you do not need spare capacity or growth operations"
+    },
+    {
+      "id": "mem-thinvec",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use `ThinVec<T>` when a pointer-sized collection handle is valuable"
+    },
+    {
+      "id": "mem-clone-from",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use `Clone::clone_from` when repeatedly replacing an existing value and the concrete type can profitably reuse its resources"
+    },
+    {
+      "id": "mem-reuse-collections",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Reuse collection capacity across repeated temporary workloads when allocation behavior or profiling shows it is worthwhile"
+    },
+    {
+      "id": "mem-avoid-format",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Avoid creating an intermediate `String` with `format!` when the caller can use a literal, formatting arguments, or an existing output buffer directly"
+    },
+    {
+      "id": "mem-write-over-format",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Write formatting directly into the real destination when an intermediate owned `String` would only be copied elsewhere"
+    },
+    {
+      "id": "mem-arena-allocator",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use bump arenas when many values share one lifetime and bulk deallocation is more useful than individual destruction"
+    },
+    {
+      "id": "mem-zero-copy",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use zero-copy patterns with slices and `Bytes`"
+    },
+    {
+      "id": "mem-compact-string",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Consider compact or clone-on-write string types when string representation is a measured memory or allocation bottleneck"
+    },
+    {
+      "id": "mem-smaller-integers",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use appropriately-sized integers to reduce memory footprint"
+    },
+    {
+      "id": "mem-assert-type-size",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Assert type size when it is a real ABI, memory-budget, or measured performance constraint; prefer upper bounds when exact layout is not required"
+    },
+    {
+      "id": "mem-take-replace",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use `mem::take` / `mem::replace` to move a value out of a `&mut` without cloning"
+    },
+    {
+      "id": "mem-drop-order",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Know Rust's deterministic destruction order, and make resource dependencies explicit when one value must outlive another"
+    },
+    {
+      "id": "mem-arc-str",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Prefer `Arc<str>` over `Arc<String>` for thread-shared immutable strings"
+    },
+    {
+      "id": "mem-box-new-uninit",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use `Box::new_uninit()` when you genuinely need deferred or in-place heap initialization; call `assume_init()` only after the allocation contains a valid `T`"
+    },
+    {
+      "id": "mem-ecow-clone-heavy",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Consider `EcoString` for clone-heavy immutable-or-COW strings"
+    },
+    {
+      "id": "mem-hotpath-profile",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Profile memory before optimizing"
+    },
+    {
+      "id": "mem-slotmap-arena",
+      "category": "Memory Optimization",
+      "priority": "CRITICAL",
+      "summary": "Use `SlotMap` for generation-checked stable keys; use `DenseSlotMap` when densely stored values and fast iteration are important"
+    },
+    {
+      "id": "unsafe-safety-comment",
+      "category": "Unsafe Code",
+      "priority": "CRITICAL",
+      "summary": "Write a `// SAFETY:` comment above every `unsafe` block and a `# Safety` section in every `unsafe fn`."
+    },
+    {
+      "id": "unsafe-minimize-scope",
+      "category": "Unsafe Code",
+      "priority": "CRITICAL",
+      "summary": "Keep `unsafe` blocks as small as possible — mark only the operation that requires unsafety, not the surrounding safe code."
+    },
+    {
+      "id": "unsafe-miri-ci",
+      "category": "Unsafe Code",
+      "priority": "CRITICAL",
+      "summary": "Run `cargo miri test` in CI for every crate that contains `unsafe` code."
+    },
+    {
+      "id": "unsafe-maybeuninit",
+      "category": "Unsafe Code",
+      "priority": "CRITICAL",
+      "summary": "Use `MaybeUninit<T>` for uninitialized memory; never use `mem::uninitialized()` or `mem::zeroed()` for types with validity invariants."
+    },
+    {
+      "id": "unsafe-extern-block",
+      "category": "Unsafe Code",
+      "priority": "CRITICAL",
+      "summary": "In Rust 2024, use `unsafe extern { }` blocks and mark an item `safe` only when every safe Rust caller can satisfy its contract."
+    },
+    {
+      "id": "unsafe-send-sync-manual",
+      "category": "Unsafe Code",
+      "priority": "CRITICAL",
+      "summary": "Justify manual `Send`/`Sync` from invariants enforced by the type and its dependencies, not from hoped-for caller behavior"
+    },
+    {
+      "id": "unsafe-no-mangle-unsafe",
+      "category": "Unsafe Code",
+      "priority": "CRITICAL",
+      "summary": "In Rust 2024, write `#[unsafe(no_mangle)]`, `#[unsafe(export_name = \"...\")]`, and `#[unsafe(link_section = \"...\")]` — not the bare attribute forms."
+    },
+    {
+      "id": "unsafe-strict-provenance",
+      "category": "Unsafe Code",
+      "priority": "CRITICAL",
+      "summary": "Prefer strict provenance APIs (`ptr.addr()`, `ptr.map_addr()`, `ptr.with_addr()`) over integer-pointer round-tripping (`as usize` / `as *const T`); prefer raw borrow syntax (`&raw const x` / `&raw mut x`) over `addr_of!` / `addr_of_mut!`."
+    },
+    {
+      "id": "api-builder-pattern",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Use a builder when construction has several optional settings, validation, or staged configuration"
+    },
+    {
+      "id": "api-builder-must-use",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Mark consuming builder methods or the builder type `#[must_use]` when ignoring the returned builder is likely a bug"
+    },
+    {
+      "id": "api-newtype-safety",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Use newtypes when identical representation hides meaning the compiler should distinguish"
+    },
+    {
+      "id": "api-typestate",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Use typestate when compile-time state transitions materially simplify or strengthen an API"
+    },
+    {
+      "id": "api-sealed-trait",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Seal a public trait when downstream crates should be able to use it but not implement it"
+    },
+    {
+      "id": "api-extension-trait",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Use a local extension trait when method-call syntax on an external type materially improves an API"
+    },
+    {
+      "id": "api-parse-dont-validate",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Parse weakly typed input into invariant-bearing domain types at system boundaries instead of repeatedly validating primitives downstream"
+    },
+    {
+      "id": "api-impl-into",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Accept `Into<T>` when the API intentionally takes ownership and useful caller types can convert into `T`"
+    },
+    {
+      "id": "api-impl-asref",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Use `AsRef<T>` for cheap generic borrowed views when accepting several source types is genuinely useful"
+    },
+    {
+      "id": "api-must-use",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Add `#[must_use]` when silently discarding a value is plausibly a bug; rely on the built-in `unused_must_use` semantics instead of treating every return value alike"
+    },
+    {
+      "id": "api-non-exhaustive",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Use `#[non_exhaustive]` when a public struct, enum, or enum variant is intentionally open to compatible growth"
+    },
+    {
+      "id": "api-from-not-into",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Implement `From<Source> for Destination` for clear infallible conversions you own; use `Into<Destination>` primarily as a caller-side bound"
+    },
+    {
+      "id": "api-default-impl",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Implement `Default` only when the type has a sensible canonical default value"
+    },
+    {
+      "id": "api-common-traits",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Implement standard traits when their semantics are useful and appropriate for the public type"
+    },
+    {
+      "id": "api-serde-optional",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Make serde optional in general-purpose libraries when serialization is not part of the core API"
+    },
+    {
+      "id": "api-impl-fromiterator",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Implement `FromIterator` and `Extend` for collection types, and `IntoIterator` for all three reference forms"
+    },
+    {
+      "id": "api-operator-overload",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Overload operators only when the semantics are natural and unsurprising"
+    },
+    {
+      "id": "api-bon-builder",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Use `bon` when typestate builders for structs or functions improve the API; account for proc-macro and typestate compile cost"
+    },
+    {
+      "id": "api-do-not-recommend",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Use `#[diagnostic::do_not_recommend]` on legal trait impls whose appearance in diagnostics would usually mislead callers"
+    },
+    {
+      "id": "api-nutype-validated",
+      "category": "API Design",
+      "priority": "HIGH",
+      "summary": "Use `nutype` when generated sanitization, validation, and invariant-preserving trait impls materially simplify a public newtype API"
+    },
+    {
+      "id": "async-tokio-runtime",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Start with Tokio's default runtime configuration; choose runtime flavor and tuning from execution requirements and measurements"
+    },
+    {
+      "id": "async-no-lock-await",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Keep blocking lock guards out of awaited sections; use an async mutex when exclusive access itself must span `.await`."
+    },
+    {
+      "id": "async-spawn-blocking",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `spawn_blocking` for blocking synchronous work; bound CPU-heavy work or use a dedicated CPU pool such as Rayon"
+    },
+    {
+      "id": "async-tokio-fs",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `tokio::fs` for ordinary filesystem operations from async code; use dedicated async types for pipes/devices and other special files"
+    },
+    {
+      "id": "async-cancellation-token",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `CancellationToken` when tasks need explicit cooperative cancellation"
+    },
+    {
+      "id": "async-join-parallel",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `join!` / `try_join!` for a fixed set of independent futures; they run concurrently on one task, not in parallel by themselves"
+    },
+    {
+      "id": "async-try-join",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `try_join!` for a fixed set of fallible futures that should run concurrently and stop when one returns an error"
+    },
+    {
+      "id": "async-select-racing",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `tokio::select!` to wait on several async events, while reasoning explicitly about cancellation of the losing futures"
+    },
+    {
+      "id": "async-bounded-channel",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Prefer bounded channels when backlog growth must be constrained; use unbounded channels only when an external invariant bounds the backlog."
+    },
+    {
+      "id": "async-mpsc-queue",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `tokio::sync::mpsc` when an async task needs a single-consumer message queue with Tokio-aware waiting or backpressure"
+    },
+    {
+      "id": "async-broadcast-pubsub",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `tokio::sync::broadcast` for bounded fan-out where every active subscriber should observe each retained event."
+    },
+    {
+      "id": "async-watch-latest",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `watch` when receivers need the latest state, not a lossless history of every update"
+    },
+    {
+      "id": "async-oneshot-response",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `tokio::sync::oneshot` when exactly one value should travel from one sender to one receiver, especially for actor-style request-response."
+    },
+    {
+      "id": "async-joinset-structured",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `JoinSet` to track a dynamic collection of Tokio tasks when completion order and lifecycle control matter"
+    },
+    {
+      "id": "async-clone-before-await",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Do not clone merely because an `.await` exists; clone or move ownership when a task/lifetime boundary actually requires ownership."
+    },
+    {
+      "id": "async-fn-in-trait",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use native `async fn` in traits for static dispatch when its return-future bounds fit the API"
+    },
+    {
+      "id": "async-async-fn-bounds",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use `AsyncFn`/`AsyncFnMut`/`AsyncFnOnce` bounds instead of `F: Fn() -> Fut, Fut: Future`"
+    },
+    {
+      "id": "async-cancel-safety",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Ensure futures used in `tokio::select!` branches are cancellation-safe"
+    },
+    {
+      "id": "async-blocking-detection",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Detect async worker stalls with latency/console instrumentation; treat blocking-pool metrics as pool pressure, not proof that async workers are blocked"
+    },
+    {
+      "id": "async-runtime-metrics",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Use Tokio runtime metrics as scheduler telemetry, and distinguish stable metrics from `tokio_unstable` instrumentation"
+    },
+    {
+      "id": "async-structured-concurrency",
+      "category": "Async/Await",
+      "priority": "HIGH",
+      "summary": "Combine `JoinSet` + `CancellationToken` + `select!` for structured async task management"
+    },
+    {
+      "id": "conc-rayon-par-iter",
+      "category": "Concurrency",
+      "priority": "HIGH",
+      "summary": "Use rayon's `par_iter()` for CPU-bound data parallelism"
+    },
+    {
+      "id": "conc-scoped-threads",
+      "category": "Concurrency",
+      "priority": "HIGH",
+      "summary": "Use `std::thread::scope` to borrow stack data across threads"
+    },
+    {
+      "id": "conc-atomic-ordering",
+      "category": "Concurrency",
+      "priority": "HIGH",
+      "summary": "Use the weakest correct memory `Ordering` for every atomic operation"
+    },
+    {
+      "id": "conc-thread-local",
+      "category": "Concurrency",
+      "priority": "HIGH",
+      "summary": "Prefer `thread_local!` with `Cell`/`RefCell` over `static mut`"
+    },
+    {
+      "id": "opt-inline-small",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Use `#[inline]` selectively, especially when a small non-generic public function benefits from cross-crate inlining."
+    },
+    {
+      "id": "opt-inline-always-rare",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Treat `#[inline(always)]` as a strong optimization hint, not a command; use it only when measurement justifies it."
+    },
+    {
+      "id": "opt-inline-never-cold",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Use cold-path and inlining annotations as measured optimization hints, not source-level guarantees"
+    },
+    {
+      "id": "opt-cold-unlikely",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Use `#[cold]` or `core::hint::cold_path()` only when an unlikely path is known or measured to matter."
+    },
+    {
+      "id": "opt-likely-hint",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Use `cold_path()` and `select_unpredictable` for branch hints on stable Rust"
+    },
+    {
+      "id": "opt-lto-release",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Enable LTO in release builds"
+    },
+    {
+      "id": "opt-codegen-units",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Set `codegen-units = 1` for maximum optimization in release builds"
+    },
+    {
+      "id": "opt-pgo-profile",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Use Profile-Guided Optimization (PGO) for maximum performance"
+    },
+    {
+      "id": "opt-target-cpu",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Tune `target-cpu` only for deployment CPUs you actually control, and use explicit runtime dispatch for portable binaries"
+    },
+    {
+      "id": "opt-bounds-check",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Structure hot loops so bounds are easy to prove; verify optimized code before using unchecked indexing"
+    },
+    {
+      "id": "opt-simd-portable",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Start with autovectorization; use stable SIMD crates or carefully dispatched `#[target_feature]` code when measurement justifies it."
+    },
+    {
+      "id": "opt-cache-friendly",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Shape data around measured access patterns and working sets; do not assume one layout is universally cache-friendly"
+    },
+    {
+      "id": "opt-cold-path",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Use `core::hint::cold_path()` to mark unlikely inline paths (Rust 1.95+)"
+    },
+    {
+      "id": "opt-select-unpredictable",
+      "category": "Compiler Optimization",
+      "priority": "HIGH",
+      "summary": "Use `core::hint::select_unpredictable()` for branchless conditional moves (Rust 1.88+)"
+    },
+    {
+      "id": "num-overflow-explicit",
+      "category": "Numeric & Arithmetic Safety",
+      "priority": "HIGH",
+      "summary": "Handle integer overflow explicitly: `checked_`/`saturating_`/`wrapping_`/`overflowing_`"
+    },
+    {
+      "id": "num-cast-try-from",
+      "category": "Numeric & Arithmetic Safety",
+      "priority": "HIGH",
+      "summary": "Avoid `as` for narrowing casts; use `From` for widening and `TryFrom` for narrowing"
+    },
+    {
+      "id": "num-float-compare",
+      "category": "Numeric & Arithmetic Safety",
+      "priority": "HIGH",
+      "summary": "Use approximate comparison when you mean numerical closeness; use exact equality for exact semantics and `total_cmp` for total ordering"
+    },
+    {
+      "id": "num-saturating-clamp",
+      "category": "Numeric & Arithmetic Safety",
+      "priority": "HIGH",
+      "summary": "Bound values with `clamp` and saturating arithmetic"
+    },
+    {
+      "id": "num-nonzero",
+      "category": "Numeric & Arithmetic Safety",
+      "priority": "HIGH",
+      "summary": "Use `NonZero*` types to forbid zero and unlock the niche optimization"
+    },
+    {
+      "id": "type-newtype-ids",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Wrap semantically distinct IDs in distinct types, and encode additional invariants such as non-zero values at construction"
+    },
+    {
+      "id": "type-newtype-validated",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Put durable domain invariants behind checked constructors so downstream code can rely on the type instead of re-validating primitives"
+    },
+    {
+      "id": "type-enum-states",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use enums when a value is in exactly one of several mutually exclusive states"
+    },
+    {
+      "id": "type-option-nullable",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use `Option<T>` when absence is an ordinary state; use `Result<T, E>` when callers need failure information"
+    },
+    {
+      "id": "type-result-fallible",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use `Result<T, E>` when an operation can fail with useful error information"
+    },
+    {
+      "id": "type-phantom-marker",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use `PhantomData` for zero-cost type markers"
+    },
+    {
+      "id": "type-never-diverge",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use `!` as the return type of functions that never return normally"
+    },
+    {
+      "id": "type-generic-bounds",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Put each trait bound on the API surface that actually requires it"
+    },
+    {
+      "id": "type-no-stringly",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Replace durable stringly-typed states and identifiers with enums or domain types, while keeping text parsing at system boundaries"
+    },
+    {
+      "id": "type-repr-transparent",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use `#[repr(transparent)]` when a wrapper intentionally needs the wrapped field's layout and ABI"
+    },
+    {
+      "id": "type-deref-coercion",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Implement `Deref`/`DerefMut` only for smart-pointer and transparent wrapper types"
+    },
+    {
+      "id": "type-display-vs-debug",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use `Display` for user-facing output and `Debug` for diagnostics; never swap them"
+    },
+    {
+      "id": "type-numeric-fmt",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Implement `LowerHex`, `UpperHex`, `Octal`, and `Binary` for numeric newtypes"
+    },
+    {
+      "id": "type-derive-more-boilerplate",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use `derive_more` to remove mechanical trait boilerplate when the generated trait semantics are actually part of your API"
+    },
+    {
+      "id": "type-newtype-repr-transparent",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use `#[repr(transparent)]` only when a newtype intentionally promises the wrapped field's layout or ABI"
+    },
+    {
+      "id": "type-nonzero-intrinsics",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use `NonZero<T>` when zero is invalid, and use only operations whose result semantics preserve that invariant"
+    },
+    {
+      "id": "type-nutype-validated",
+      "category": "Type Safety",
+      "priority": "MEDIUM",
+      "summary": "Use validated newtypes to make invalid states unrepresentable; `nutype` is useful when generated constructors and invariant-preserving trait impls justify a proc macro"
+    },
+    {
+      "id": "trait-associated-type-vs-generic",
+      "category": "Trait & Generics Design",
+      "priority": "MEDIUM",
+      "summary": "Use an associated type when each impl has exactly one output type; use a generic parameter when a type can implement the trait for many input types"
+    },
+    {
+      "id": "trait-blanket-impl",
+      "category": "Trait & Generics Design",
+      "priority": "MEDIUM",
+      "summary": "Use a blanket impl `impl<T: Bound> Trait for T` to give behaviour to every type that satisfies a bound"
+    },
+    {
+      "id": "trait-coherence-newtype",
+      "category": "Trait & Generics Design",
+      "priority": "MEDIUM",
+      "summary": "Respect the orphan rule; wrap a foreign type in a newtype to implement a foreign trait on it"
+    },
+    {
+      "id": "trait-default-methods",
+      "category": "Trait & Generics Design",
+      "priority": "MEDIUM",
+      "summary": "Define a trait in terms of a few required methods plus defaulted ones built on top of them"
+    },
+    {
+      "id": "trait-dyn-vs-generic",
+      "category": "Trait & Generics Design",
+      "priority": "MEDIUM",
+      "summary": "Choose static dispatch (generics / `impl Trait`) vs dynamic dispatch (`dyn Trait`) deliberately"
+    },
+    {
+      "id": "trait-object-safety",
+      "category": "Trait & Generics Design",
+      "priority": "MEDIUM",
+      "summary": "Keep a trait dyn-compatible (object-safe) when you need `dyn Trait`"
+    },
+    {
+      "id": "trait-upcasting",
+      "category": "Trait & Generics Design",
+      "priority": "MEDIUM",
+      "summary": "Use trait-object upcasting for dyn-compatible supertrait relationships (Rust 1.86+)"
+    },
+    {
+      "id": "conv-tryfrom-fallible",
+      "category": "Conversions",
+      "priority": "MEDIUM",
+      "summary": "Implement `TryFrom` for fallible conversions instead of ad-hoc conversion functions"
+    },
+    {
+      "id": "conv-fromstr-parsing",
+      "category": "Conversions",
+      "priority": "MEDIUM",
+      "summary": "Implement `FromStr` to enable `str::parse` for string-to-type conversions"
+    },
+    {
+      "id": "conv-asmut-mutable",
+      "category": "Conversions",
+      "priority": "MEDIUM",
+      "summary": "Accept `impl AsMut<T>` for flexible mutable borrowed inputs instead of concrete mutable references"
+    },
+    {
+      "id": "const-block",
+      "category": "Const & Compile-Time",
+      "priority": "MEDIUM",
+      "summary": "Use inline `const { }` blocks for compile-time evaluation and assertions"
+    },
+    {
+      "id": "const-fn",
+      "category": "Const & Compile-Time",
+      "priority": "MEDIUM",
+      "summary": "Make functions `const fn` when they can run at compile time"
+    },
+    {
+      "id": "const-generics",
+      "category": "Const & Compile-Time",
+      "priority": "MEDIUM",
+      "summary": "Parameterize over values with const generics `<const N: usize>`"
+    },
+    {
+      "id": "const-vs-static",
+      "category": "Const & Compile-Time",
+      "priority": "MEDIUM",
+      "summary": "Use `const` for an inlined value and `static` for a single addressed instance"
+    },
+    {
+      "id": "serde-rename-all",
+      "category": "Serde",
+      "priority": "MEDIUM",
+      "summary": "Match the external naming convention with `#[serde(rename_all = ...)]`"
+    },
+    {
+      "id": "serde-default-compat",
+      "category": "Serde",
+      "priority": "MEDIUM",
+      "summary": "Use `#[serde(default)]` for optional and backward-compatible fields"
+    },
+    {
+      "id": "serde-skip-empty",
+      "category": "Serde",
+      "priority": "MEDIUM",
+      "summary": "Omit empty fields with `skip_serializing_if`"
+    },
+    {
+      "id": "serde-flatten",
+      "category": "Serde",
+      "priority": "MEDIUM",
+      "summary": "Inline nested structs or capture extra keys with `#[serde(flatten)]`"
+    },
+    {
+      "id": "serde-enum-representation",
+      "category": "Serde",
+      "priority": "MEDIUM",
+      "summary": "Choose enum tagging deliberately: externally, internally, adjacently tagged, or untagged"
+    },
+    {
+      "id": "serde-deny-unknown-fields",
+      "category": "Serde",
+      "priority": "MEDIUM",
+      "summary": "Reject unexpected keys with `#[serde(deny_unknown_fields)]`"
+    },
+    {
+      "id": "serde-custom-with",
+      "category": "Serde",
+      "priority": "MEDIUM",
+      "summary": "Customize a field's (de)serialization with `with` / `serialize_with` / `deserialize_with`"
+    },
+    {
+      "id": "serde-try-from-validate",
+      "category": "Serde",
+      "priority": "MEDIUM",
+      "summary": "Validate while deserializing with `#[serde(try_from = \"Raw\")]`"
+    },
+    {
+      "id": "pat-let-else",
+      "category": "Pattern Matching",
+      "priority": "MEDIUM",
+      "summary": "Use `let ... else` for early-return pattern extraction"
+    },
+    {
+      "id": "pat-matches-macro",
+      "category": "Pattern Matching",
+      "priority": "MEDIUM",
+      "summary": "Use `matches!()` for boolean pattern tests"
+    },
+    {
+      "id": "pat-if-let-chains",
+      "category": "Pattern Matching",
+      "priority": "MEDIUM",
+      "summary": "Use `if let` / `while let` chains to combine pattern bindings and conditions"
+    },
+    {
+      "id": "pat-exhaustive-enum",
+      "category": "Pattern Matching",
+      "priority": "MEDIUM",
+      "summary": "Match owned enums exhaustively; avoid catch-all `_` that hides new variants"
+    },
+    {
+      "id": "pat-at-bindings",
+      "category": "Pattern Matching",
+      "priority": "MEDIUM",
+      "summary": "Use `@` bindings to capture a value while matching it against a pattern"
+    },
+    {
+      "id": "macro-prefer-functions",
+      "category": "Macros",
+      "priority": "MEDIUM",
+      "summary": "Reach for a macro only when a function or generic cannot express it"
+    },
+    {
+      "id": "macro-rules-hygiene",
+      "category": "Macros",
+      "priority": "MEDIUM",
+      "summary": "Understand `macro_rules!` mixed-site hygiene and use `$crate` for defining-crate paths"
+    },
+    {
+      "id": "macro-fragment-specifiers",
+      "category": "Macros",
+      "priority": "MEDIUM",
+      "summary": "Capture with precise fragment specifiers, not raw `:tt`, where you can"
+    },
+    {
+      "id": "macro-export-crate-path",
+      "category": "Macros",
+      "priority": "MEDIUM",
+      "summary": "Use `#[macro_export]` when a `macro_rules!` macro is part of the public crate API"
+    },
+    {
+      "id": "macro-private-helpers",
+      "category": "Macros",
+      "priority": "MEDIUM",
+      "summary": "Route exported-macro support items through a clearly marked `#[doc(hidden)]` module when call-site visibility requires them to be public"
+    },
+    {
+      "id": "macro-proc-two-crate",
+      "category": "Macros",
+      "priority": "MEDIUM",
+      "summary": "Put procedural macros in a dedicated `proc-macro = true` crate and re-export them from the ordinary library facade"
+    },
+    {
+      "id": "macro-proc-syn-quote",
+      "category": "Macros",
+      "priority": "MEDIUM",
+      "summary": "Put proc-macro parsing and generation in testable `syn`/`quote` helpers"
+    },
+    {
+      "id": "macro-proc-error-spans",
+      "category": "Macros",
+      "priority": "MEDIUM",
+      "summary": "Turn expected proc-macro input errors into spanned compile errors instead of panics"
+    },
+    {
+      "id": "closure-fn-trait-bounds",
+      "category": "Closures",
+      "priority": "MEDIUM",
+      "summary": "Require the least restrictive `Fn` trait a callback needs (`FnOnce` ⊇ `FnMut` ⊇ `Fn`)"
+    },
+    {
+      "id": "closure-impl-fn-return",
+      "category": "Closures",
+      "priority": "MEDIUM",
+      "summary": "Return closures as `impl Fn`/`FnMut`/`FnOnce`, not `Box<dyn Fn>`"
+    },
+    {
+      "id": "closure-move-capture",
+      "category": "Closures",
+      "priority": "MEDIUM",
+      "summary": "Use `move` for closures that outlive the current scope; clone before `move` to keep the original"
+    },
+    {
+      "id": "closure-static-vs-dyn",
+      "category": "Closures",
+      "priority": "MEDIUM",
+      "summary": "Accept `impl Fn` (generic) for hot callbacks; use `&dyn Fn`/`Box<dyn Fn>` to cut code size or to store them"
+    },
+    {
+      "id": "closure-disjoint-capture",
+      "category": "Closures",
+      "priority": "MEDIUM",
+      "summary": "Capture only what you use; lean on edition-2021 disjoint closure captures"
+    },
+    {
+      "id": "closure-async-closures",
+      "category": "Closures",
+      "priority": "MEDIUM",
+      "summary": "Use async closures when a callback future needs to borrow from closure captures; use `AsyncFn*` bounds for higher-order async callbacks"
+    },
+    {
+      "id": "coll-binaryheap",
+      "category": "Collections",
+      "priority": "MEDIUM",
+      "summary": "Use `BinaryHeap` for a priority queue or repeated max-extraction"
+    },
+    {
+      "id": "coll-map-choice",
+      "category": "Collections",
+      "priority": "MEDIUM",
+      "summary": "Pick the map by access pattern: `HashMap` (fast, unordered), `BTreeMap` (sorted / range queries), `IndexMap` (insertion order)"
+    },
+    {
+      "id": "coll-seq-choice",
+      "category": "Collections",
+      "priority": "MEDIUM",
+      "summary": "Default to `Vec`; use `VecDeque` for queue/deque behaviour; avoid `LinkedList`"
+    },
+    {
+      "id": "coll-set-membership",
+      "category": "Collections",
+      "priority": "MEDIUM",
+      "summary": "Use `HashSet`/`BTreeSet` for membership tests and dedup, not linear `Vec::contains`"
+    },
+    {
+      "id": "name-types-camel",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Use `UpperCamelCase` for structs, enums, traits, type aliases, and other type-level names"
+    },
+    {
+      "id": "name-variants-camel",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Use `UpperCamelCase` for enum variants"
+    },
+    {
+      "id": "name-funcs-snake",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Use `snake_case` for functions, methods, variables, and modules"
+    },
+    {
+      "id": "name-consts-screaming",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Use `SCREAMING_SNAKE_CASE` for constants and statics"
+    },
+    {
+      "id": "name-lifetime-short",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Keep lifetime parameter names short and lowercase; use `'a` by default and descriptive names such as `'src` when they add real meaning"
+    },
+    {
+      "id": "name-type-param-single",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Use concise `UpperCamelCase` type-parameter names—often `T`, `E`, `K`, `V`, but descriptive names are appropriate when they improve clarity"
+    },
+    {
+      "id": "name-as-free",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Use `as_` for free borrowed conversions"
+    },
+    {
+      "id": "name-to-expensive",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Use `to_` for ad-hoc conversions that do nontrivial work without consuming a non-Copy receiver"
+    },
+    {
+      "id": "name-into-ownership",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Use `into_` for ad-hoc conversions that consume an owned value and produce another owned representation"
+    },
+    {
+      "id": "name-no-get-prefix",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Omit `get_` for ordinary named getters; reserve `get` for APIs where “get the one obvious value” or validated/indexed access is the established operation"
+    },
+    {
+      "id": "name-is-has-bool",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Name boolean methods as clear predicates; use `is_`, `has_`, `can_`, and similar prefixes when they match the question being answered"
+    },
+    {
+      "id": "name-iter-convention",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "For collection-wide traversal, use the conventional `iter`, `iter_mut`, and `IntoIterator` ownership shapes"
+    },
+    {
+      "id": "name-iter-method",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Implement `IntoIterator` delegation for `for` loop support"
+    },
+    {
+      "id": "name-iter-type-match",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Name public iterator types after the methods or functions that produce them"
+    },
+    {
+      "id": "name-acronym-word",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "In `UpperCamelCase`, treat acronyms as ordinary words: `HttpServer`, `Uuid`, `TcpStream`"
+    },
+    {
+      "id": "name-crate-no-rs",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Avoid `-rs`, `-rust`, `rust-`, and similar language-only affixes in crate/package names"
+    },
+    {
+      "id": "name-feature",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Name Cargo features without placeholder words like `abc`, `use-abc`, or `with-abc`"
+    },
+    {
+      "id": "name-word-order",
+      "category": "Naming Conventions",
+      "priority": "MEDIUM",
+      "summary": "Keep compound names in a consistent, idiomatic word order"
+    },
+    {
+      "id": "test-cfg-test-module",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Put unit tests in `#[cfg(test)] mod tests { }` within each module"
+    },
+    {
+      "id": "test-use-super",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `use super::*;` in test modules to access parent module items"
+    },
+    {
+      "id": "test-integration-dir",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Put external-API integration tests in Cargo's `tests/` targets"
+    },
+    {
+      "id": "test-descriptive-names",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use descriptive test names that explain what is being tested"
+    },
+    {
+      "id": "test-arrange-act-assert",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Structure tests with clear Arrange, Act, Assert sections"
+    },
+    {
+      "id": "test-proptest-properties",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use proptest for property-based testing"
+    },
+    {
+      "id": "test-mockall-mocking",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use mockall for trait mocking"
+    },
+    {
+      "id": "test-mock-traits",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Put meaningful external dependencies behind replaceable boundaries when that improves testing"
+    },
+    {
+      "id": "test-fixture-raii",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use RAII for owned test resources; do not confuse cleanup with safe mutation of process-global state"
+    },
+    {
+      "id": "test-tokio-async",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `#[tokio::test]` for ordinary Tokio-driven async tests, and configure the runtime flavor only when the test needs it"
+    },
+    {
+      "id": "test-should-panic",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `#[should_panic]` for tests whose success condition is a deliberate panic"
+    },
+    {
+      "id": "test-criterion-bench",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `criterion` for benchmarking (or `divan` for simpler workflows)"
+    },
+    {
+      "id": "test-doctest-examples",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Keep public documentation examples executable as doctests when practical"
+    },
+    {
+      "id": "test-loom-concurrency",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `loom` to exhaustively test lock-free and concurrent code"
+    },
+    {
+      "id": "test-snapshot-testing",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use snapshot tests for complex output that humans should review as a whole"
+    },
+    {
+      "id": "test-assert-matches",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `assert_matches!` / `debug_assert_matches!` (Rust 1.96+) for pattern-based assertions"
+    },
+    {
+      "id": "test-coverage-llvm-cov",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `cargo-llvm-cov` for LLVM-based code coverage"
+    },
+    {
+      "id": "test-fuzzing-minimal",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `cargo-fuzz` for fuzz testing critical functions"
+    },
+    {
+      "id": "test-insta-snapshot",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `insta` for snapshot/approval testing"
+    },
+    {
+      "id": "test-nextest-workflow",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `cargo-nextest` for faster execution and CI partitioning"
+    },
+    {
+      "id": "test-rstest-fixtures",
+      "category": "Testing",
+      "priority": "MEDIUM",
+      "summary": "Use `rstest` for parameterized tests, fixtures, and async test setup"
+    },
+    {
+      "id": "doc-all-public",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Document the public API with rustdoc comments"
+    },
+    {
+      "id": "doc-module-inner",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Use inner doc comments (`//!`) to document a crate or module as a whole"
+    },
+    {
+      "id": "doc-examples-section",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Add focused `# Examples` sections when an example materially clarifies how to use the API"
+    },
+    {
+      "id": "doc-errors-section",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Document meaningful failure conditions in a `# Errors` section"
+    },
+    {
+      "id": "doc-panics-section",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Include `# Panics` section for functions that can panic"
+    },
+    {
+      "id": "doc-safety-section",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Document caller obligations with `# Safety`; justify local unsafe operations with `// SAFETY:` proofs"
+    },
+    {
+      "id": "doc-question-mark",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Give doctests a `Result`-returning context when demonstrating fallible operations; do not hide setup failure with unwrap/expect"
+    },
+    {
+      "id": "doc-hidden-setup",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Hide incidental doctest setup with `# ` while leaving the behavior users need to understand visible"
+    },
+    {
+      "id": "doc-intra-links",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Use intra-doc links for important relationships that rustdoc should resolve and validate"
+    },
+    {
+      "id": "doc-link-types",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Cross-link related public types and operations when the links help readers navigate the API"
+    },
+    {
+      "id": "doc-cargo-metadata",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Fill `Cargo.toml` metadata for published crates"
+    },
+    {
+      "id": "doc-crate-readme",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Unify the README and crate root docs with `#![doc = include_str!(\"../README.md\")]`"
+    },
+    {
+      "id": "doc-cfg-patterns",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Use real `#[cfg(...)]` attributes for availability; when nightly rustdoc's `doc_cfg` is enabled, let `doc(auto_cfg)` surface those conditions and use `doc(cfg)` only when you need to override the displayed condition"
+    },
+    {
+      "id": "doc-hidden-public",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Use `#[doc(hidden)]` only when a public item must remain callable but should be omitted from normal generated documentation"
+    },
+    {
+      "id": "doc-include-str",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Use `#[doc = include_str!(\"...\")]` when an external text file is intentionally part of an item's generated documentation"
+    },
+    {
+      "id": "doc-test-edition-2024",
+      "category": "Documentation",
+      "priority": "MEDIUM",
+      "summary": "Account for Edition 2024 rustdoc doctest merging, `standalone_crate`, and source-relative nested includes"
+    },
+    {
+      "id": "obs-tracing-over-log",
+      "category": "Observability",
+      "priority": "MEDIUM",
+      "summary": "Use `tracing` for structured, span-aware diagnostics instead of `println!` or bare `log`"
+    },
+    {
+      "id": "obs-library-facade",
+      "category": "Observability",
+      "priority": "MEDIUM",
+      "summary": "Reusable libraries should emit observability data without surprising callers by installing process-global logging or tracing state"
+    },
+    {
+      "id": "obs-structured-fields",
+      "category": "Observability",
+      "priority": "MEDIUM",
+      "summary": "Record structured key-value fields, not values interpolated into the message string"
+    },
+    {
+      "id": "obs-instrument-spans",
+      "category": "Observability",
+      "priority": "MEDIUM",
+      "summary": "Use `#[tracing::instrument]` and spans to attach context to async tasks and requests"
+    },
+    {
+      "id": "obs-levels-filter",
+      "category": "Observability",
+      "priority": "MEDIUM",
+      "summary": "Use log levels meaningfully and filter with `EnvFilter` / `RUST_LOG`"
+    },
+    {
+      "id": "obs-error-chain",
+      "category": "Observability",
+      "priority": "MEDIUM",
+      "summary": "Log errors with their full source chain, and log each error exactly once"
+    },
+    {
+      "id": "obs-no-sensitive-data",
+      "category": "Observability",
+      "priority": "MEDIUM",
+      "summary": "Never log secrets or PII; redact or skip them"
+    },
+    {
+      "id": "perf-iter-over-index",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Prefer direct iteration when you are traversing values; use indexing when the index is part of the algorithm"
+    },
+    {
+      "id": "perf-iter-lazy",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Keep iterator pipelines lazy when streaming or short-circuiting is useful; collect only when ownership, reuse, sorting, indexing, or another concrete requirement needs a collection"
+    },
+    {
+      "id": "perf-collect-once",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Keep iterator pipelines lazy until you actually need an owned collection; materialize intermediate results when their semantics justify it"
+    },
+    {
+      "id": "perf-entry-api",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Use a map's entry API when one key lookup should decide both the occupied and vacant cases."
+    },
+    {
+      "id": "perf-drain-reuse",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Use `drain` or `extract_if` when you need to remove owned elements while retaining the source collection's allocation; do not introduce an intermediate collection unless ownership requires one"
+    },
+    {
+      "id": "perf-extend-batch",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Use `extend`, `extend_from_slice`, or `append` when adding a batch expresses the ownership you want; reserve explicitly when the final size is cheaply known"
+    },
+    {
+      "id": "perf-chain-avoid",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Use `Iterator::chain` when it expresses the traversal clearly; split or materialize only when measurement shows the chained iterator is a bottleneck"
+    },
+    {
+      "id": "perf-collect-into",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Reuse an existing destination with `clear()` + `extend()` on stable Rust; nightly `Iterator::collect_into` appends like `Extend::extend` and does not clear for you"
+    },
+    {
+      "id": "perf-black-box-bench",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Use `std::hint::black_box` in benchmarks when compile-time knowledge could make the measured work unrealistically disappear or specialize."
+    },
+    {
+      "id": "perf-release-profile",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Optimize release profile settings"
+    },
+    {
+      "id": "perf-profile-first",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Measure representative workloads before choosing an optimization, then measure again after the change."
+    },
+    {
+      "id": "perf-ahash",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Use a faster hasher (`ahash` / `FxHashMap`) when DoS resistance is not needed"
+    },
+    {
+      "id": "perf-io-buffering",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Wrap `Read`/`Write` in `BufReader`/`BufWriter` for many small operations"
+    },
+    {
+      "id": "perf-array-windows",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Use `<[T]>::array_windows` and `<[T]>::as_chunks` when a compile-time window or chunk size is useful"
+    },
+    {
+      "id": "perf-atomic-update",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Use `Atomic*::update` and `try_update` for cleaner compare-and-update loops"
+    },
+    {
+      "id": "perf-copy-range",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Treat `Copy` ranges as an ownership and ergonomics choice, not an automatic performance optimization"
+    },
+    {
+      "id": "perf-extract-if",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Use `extract_if` when matching elements should be removed while their ownership is yielded to the caller."
+    },
+    {
+      "id": "perf-hint-apis",
+      "category": "Performance Patterns",
+      "priority": "MEDIUM",
+      "summary": "Use compiler hint APIs only when their semantics match a measured hot path; they are advisory optimizations, not code-generation guarantees"
+    },
+    {
+      "id": "proj-lib-main-split",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Put reusable or directly importable application logic in a library target; keep binary entry points thin when that separation helps."
+    },
+    {
+      "id": "proj-mod-by-feature",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Prefer domain/feature-oriented modules when they keep code that changes together in one place"
+    },
+    {
+      "id": "proj-flat-small",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Keep small projects flat"
+    },
+    {
+      "id": "proj-mod-rs-dir",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Choose a consistent multi-file module layout; both `foo.rs` + `foo/` and `foo/mod.rs` are supported"
+    },
+    {
+      "id": "proj-pub-crate-internal",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Use the narrowest visibility that matches the intended module boundary; use `pub(crate)` for APIs shared across the crate but not exposed downstream"
+    },
+    {
+      "id": "proj-pub-super-parent",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Use `pub(super)` when an item declared in a child module must be visible in its parent module scope"
+    },
+    {
+      "id": "proj-pub-use-reexport",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Use `pub use` to curate intentional public paths; do not expose internal module layout or dependency types accidentally."
+    },
+    {
+      "id": "proj-prelude-module",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Offer a small opt-in `prelude` only when callers repeatedly need the same coherent set of imports."
+    },
+    {
+      "id": "proj-bin-dir",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Use `src/bin/` for conventionally discovered additional binary targets"
+    },
+    {
+      "id": "proj-workspace-large",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Use workspaces for large projects"
+    },
+    {
+      "id": "proj-workspace-deps",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Use workspace dependency inheritance for consistent versions across crates"
+    },
+    {
+      "id": "proj-feature-additive",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Design Cargo features to be additive whenever feature unification can combine them"
+    },
+    {
+      "id": "proj-msrv-declare",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Declare `rust-version` (MSRV) in Cargo.toml and test it in CI"
+    },
+    {
+      "id": "proj-build-rs-minimal",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Keep `build.rs` deterministic, narrow its declared inputs, and write generated artifacts under `OUT_DIR`."
+    },
+    {
+      "id": "proj-lints-table",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Use `[lints]` / `[workspace.lints]` for centralized lint configuration"
+    },
+    {
+      "id": "proj-workspace-metadata",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Use `[workspace.package]` for shared metadata inheritance"
+    },
+    {
+      "id": "proj-workspace-publish",
+      "category": "Project Structure",
+      "priority": "LOW",
+      "summary": "Use `cargo publish --workspace` for native workspace publishing (Rust 1.90+)"
+    },
+    {
+      "id": "lint-deny-correctness",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Deny clippy::correctness and equivalent rustc lints"
+    },
+    {
+      "id": "lint-warn-suspicious",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Enable clippy::suspicious for likely bugs"
+    },
+    {
+      "id": "lint-warn-style",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Enable `clippy::style` for established Rust idioms, while treating its suggestions as reviewable guidance rather than formatting law"
+    },
+    {
+      "id": "lint-warn-complexity",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Enable `clippy::complexity` to catch needlessly complicated expressions and operations"
+    },
+    {
+      "id": "lint-warn-perf",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Enable `clippy::perf` for established performance anti-patterns; measure before adding optimizer hints"
+    },
+    {
+      "id": "lint-pedantic-selective",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Enable clippy::pedantic selectively"
+    },
+    {
+      "id": "lint-missing-docs",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Warn on missing documentation for public items"
+    },
+    {
+      "id": "lint-unsafe-doc",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Document every unsafe operation with the invariant that makes it sound"
+    },
+    {
+      "id": "lint-cargo-metadata",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Enable clippy::cargo for published crates"
+    },
+    {
+      "id": "lint-rustfmt-check",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Run cargo fmt --check in CI"
+    },
+    {
+      "id": "lint-workspace-lints",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Configure lints at workspace level for consistent enforcement"
+    },
+    {
+      "id": "lint-cfg-check",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Enable `unexpected_cfgs` and declare known cfgs to catch feature-gate typos"
+    },
+    {
+      "id": "lint-clippy-nursery-selected",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Enable `clippy::nursery` lints selectively and re-check group membership when the toolchain changes"
+    },
+    {
+      "id": "lint-cargo-unused-features",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Detect unused feature flags declared in Cargo.toml (`[lints.cargo]`, nightly-only)"
+    },
+    {
+      "id": "lint-dylint-custom",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Use Dylint for project-specific custom lints without forking clippy"
+    },
+    {
+      "id": "lint-edition-2024",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Use the `rust_2024_compatibility` lint group and `cargo fix --edition` to audit edition-sensitive code before switching to Rust 2024"
+    },
+    {
+      "id": "lint-lints-table",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Use the `[lints]` table in `Cargo.toml` for canonical lint configuration (Rust 1.74+)"
+    },
+    {
+      "id": "lint-uplifted",
+      "category": "Clippy & Linting",
+      "priority": "LOW",
+      "summary": "Track Clippy lints uplifted into rustc and adjacent compiler lint changes (Rust 1.86-1.99)"
+    },
+    {
+      "id": "anti-unwrap-abuse",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Avoid `unwrap()` and `expect()`; make failure handling or invariant representation explicit"
+    },
+    {
+      "id": "anti-expect-lazy",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Do not use `expect()` as a shortcut for either error handling or invariant enforcement"
+    },
+    {
+      "id": "anti-clone-excessive",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Do not clone merely to satisfy ownership when borrowing, moving, or deliberate sharing better matches the API"
+    },
+    {
+      "id": "anti-lock-across-await",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Do not hold blocking lock guards across `.await`; an async mutex may intentionally span `.await` when the protected resource must remain exclusively owned."
+    },
+    {
+      "id": "anti-string-for-str",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Prefer `&str` over `&String` when the API only needs string contents"
+    },
+    {
+      "id": "anti-vec-for-slice",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Accept slices when an API only needs element access; accept `Vec` references when vector-specific capacity or length-changing operations are genuinely part of the contract"
+    },
+    {
+      "id": "anti-index-over-iter",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Don't use indexing when iterators work"
+    },
+    {
+      "id": "anti-panic-expected",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Do not use panics as the API for expected runtime failures; keep deliberate termination and assertions explicit at their real boundary"
+    },
+    {
+      "id": "anti-empty-catch",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Do not accidentally discard errors; make best-effort and discard semantics explicit"
+    },
+    {
+      "id": "anti-over-abstraction",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Introduce generics and traits when they express a stable semantic boundary; do not generalize code solely for hypothetical flexibility"
+    },
+    {
+      "id": "anti-premature-optimize",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Don't optimize before profiling"
+    },
+    {
+      "id": "anti-type-erasure",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Prefer static polymorphism when one concrete type is sufficient; use `dyn Trait` deliberately when runtime type erasure and heterogeneous implementations are part of the design"
+    },
+    {
+      "id": "anti-format-hot-path",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Avoid unnecessary intermediate formatting allocations in measured hot paths; keep `format!` when a new owned `String` is the actual result you need"
+    },
+    {
+      "id": "anti-collect-intermediate",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Keep iterator pipelines lazy when materialization adds no semantic value; collect only when you need owned storage, reordering, repeated access, or another collection operation"
+    },
+    {
+      "id": "anti-stringly-typed",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Don't use strings where enums or newtypes provide a meaningful domain type"
+    },
+    {
+      "id": "anti-arc-mutex-everything",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Do not default to `Arc<Mutex<T>>` when ownership, channels, atomics, or another synchronization primitive better matches the state"
+    },
+    {
+      "id": "anti-blocking-async-drop",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Don't block or depend on asynchronous work completing from `Drop` of async types"
+    },
+    {
+      "id": "anti-block-on-async",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Don't call `block_on` from code that is already running asynchronously"
+    },
+    {
+      "id": "anti-deref-overuse",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Implement `Deref` only when transparent target-like behavior is part of the type's intended API"
+    },
+    {
+      "id": "anti-unsafe-send-sync",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Never use `unsafe impl Send` or `unsafe impl Sync` merely to silence auto-trait errors; each impl is a safety contract that other unsafe code may rely on"
+    },
+    {
+      "id": "anti-session-fixation",
+      "category": "Anti-patterns",
+      "priority": "REFERENCE",
+      "summary": "Rotate session IDs when authentication or privilege changes so a pre-authentication identifier cannot inherit elevated state."
+    }
+  ]
+}

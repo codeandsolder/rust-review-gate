@@ -37,28 +37,26 @@ pub fn consensus(
 
     for run in runs {
         for finding in &run.review.findings {
-            for rule in &finding.rule_refs {
-                let existing = clusters.iter_mut().find(|cluster| {
-                    cluster.file == finding.file
-                        && cluster.rule == *rule
-                        && cluster.line.abs_diff(finding.line) <= line_tolerance
-                });
+            let existing = clusters.iter_mut().find(|cluster| {
+                cluster.file == finding.file
+                    && cluster.rule == finding.rule
+                    && cluster.line.abs_diff(finding.line) <= line_tolerance
+            });
 
-                if let Some(cluster) = existing {
-                    cluster.voters.insert(run.model.clone());
-                    if stronger(finding, &cluster.representative) {
-                        cluster.line = finding.line;
-                        cluster.representative = finding.clone();
-                    }
-                } else {
-                    clusters.push(Cluster {
-                        file: finding.file.clone(),
-                        line: finding.line,
-                        rule: rule.clone(),
-                        voters: BTreeSet::from([run.model.clone()]),
-                        representative: finding.clone(),
-                    });
+            if let Some(cluster) = existing {
+                cluster.voters.insert(run.model.clone());
+                if stronger(finding, &cluster.representative) {
+                    cluster.line = finding.line;
+                    cluster.representative = finding.clone();
                 }
+            } else {
+                clusters.push(Cluster {
+                    file: finding.file.clone(),
+                    line: finding.line,
+                    rule: finding.rule.clone(),
+                    voters: BTreeSet::from([run.model.clone()]),
+                    representative: finding.clone(),
+                });
             }
         }
     }
@@ -119,7 +117,8 @@ mod tests {
                     title: "problem".to_owned(),
                     explanation: "breaks under a concrete condition".to_owned(),
                     evidence: "changed branch".to_owned(),
-                    rule_refs: vec![rule.to_owned()],
+                    rule: rule.to_owned(),
+                    supporting_rules: Vec::new(),
                     suggested_test: None,
                 }],
             },
@@ -141,5 +140,19 @@ mod tests {
         assert_eq!(accepted.len(), 1);
         assert_eq!(accepted[0].rule, "displayed-error");
         assert_eq!(accepted[0].votes, 2);
+    }
+
+    #[test]
+    fn supporting_rules_do_not_create_consensus() {
+        let mut first = run("a", 10, "displayed-error");
+        first.review.findings[0]
+            .supporting_rules
+            .push("anti-over-abstraction".to_owned());
+        let mut second = run("b", 11, "api-contract");
+        second.review.findings[0]
+            .supporting_rules
+            .push("anti-over-abstraction".to_owned());
+
+        assert!(consensus(&[first, second], 2, 3).is_empty());
     }
 }

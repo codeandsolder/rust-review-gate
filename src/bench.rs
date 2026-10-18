@@ -70,9 +70,9 @@ pub async fn run(
             }
         }
 
-        let expected = scores
+        let expected = fixtures
             .iter()
-            .map(|score| score.expected_rules.len())
+            .map(|fixture| fixture.expected_rules.len())
             .sum::<usize>();
         let tp = scores
             .iter()
@@ -131,7 +131,9 @@ async fn run_fixture(
         .review
         .findings
         .iter()
-        .flat_map(|finding| finding.rule_refs.iter().cloned())
+        .flat_map(|finding| {
+            std::iter::once(finding.rule.clone()).chain(finding.supporting_rules.iter().cloned())
+        })
         .collect();
     let expected: BTreeSet<String> = fixture.expected_rules.iter().cloned().collect();
 

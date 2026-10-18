@@ -18,8 +18,9 @@ pub struct Finding {
     pub title: String,
     pub explanation: String,
     pub evidence: String,
+    pub rule: String,
     #[serde(default)]
-    pub rule_refs: Vec<String>,
+    pub supporting_rules: Vec<String>,
     pub suggested_test: Option<String>,
 }
 
@@ -40,6 +41,7 @@ pub struct ModelRun {
     pub elapsed_ms: u64,
 }
 
+#[derive(Clone)]
 pub struct ModelClient {
     http: reqwest::Client,
     api_key: String,
@@ -56,6 +58,7 @@ impl ModelClient {
     }
 
     pub async fn review(&self, model: &str, prompt: &str, temperature: f32) -> Result<ModelRun> {
+        let profile = generation_profile(model);
         let body = json!({
             "model": model,
             "messages": [
@@ -63,8 +66,9 @@ impl ModelClient {
                 {"role": "user", "content": prompt}
             ],
             "temperature": temperature,
-            "max_tokens": 1600,
-            "reasoning": {"effort": "low"}
+            "max_tokens": profile.max_tokens,
+            "reasoning": profile.reasoning,
+            "response_format": {"type": "json_object"}
         });
 
         let started = Instant::now();
@@ -133,25 +137,46 @@ impl ModelClient {
     }
 }
 
+struct GenerationProfile {
+    max_tokens: u32,
+    reasoning: serde_json::Value,
+}
+
+fn generation_profile(model: &str) -> GenerationProfile {
+    match model {
+        "~openai/gpt-luna-latest"
+        | "openai/gpt-6-luna"
+        | "deepseek/deepseek-v4.1-flash"
+        | "poolside/laguna-s-2.1:free" => GenerationProfile {
+            max_tokens: 2_400,
+            reasoning: json!({"enabled": false}),
+        },
+        "z-ai/glm-5.3-flash" | "meta/muse-spark-1.3-contributor" => GenerationProfile {
+            max_tokens: 8_192,
+            reasoning: json!({"effort": "low", "exclude": true}),
+        },
+        _ => GenerationProfile {
+            max_tokens: 4_096,
+            reasoning: json!({"effort": "low", "exclude": true}),
+        },
+    }
+}
+
 fn parse_review(content: &str) -> Result<Review> {
     if let Ok(review) = serde_json::from_str(content) {
         return Ok(review);
     }
 
-    let raw = content.trim();
-    let trimmed = raw
-        .strip_prefix("```json")
-        .or_else(|| raw.strip_prefix("```"))
-        .unwrap_or(raw)
-        .trim();
-    let trimmed = trimmed.strip_suffix("```").unwrap_or(trimmed).trim();
-    if let Ok(review) = serde_json::from_str(trimmed) {
-        return Ok(review);
+    for (start, _) in content.match_indices('{') {
+        let mut deserializer = serde_json::Deserializer::from_str(&content[start..]);
+        if let Ok(review) = Review::deserialize(&mut deserializer) {
+            return Ok(review);
+        }
     }
 
-    let start = content.find('{').context("no JSON object start")?;
-    let end = content.rfind('}').context("no JSON object end")?;
-    serde_json::from_str(&content[start..=end]).context("invalid JSON object")
+    Err(anyhow!(
+        "response did not contain a valid review JSON object"
+    ))
 }
 
 #[cfg(test)]
@@ -159,8 +184,15 @@ mod tests {
     use super::parse_review;
 
     #[test]
-    fn parses_fenced_json() {
-        let parsed = parse_review("```json\n{\"verdict\":\"pass\",\"findings\":[]}\n```");
+    fn parses_fenced_json_after_braces_in_prose() {
+        let mut content = String::from("plain ");
+        content.push('{');
+        content.push_str("err:#");
+        content.push('}');
+        content.push_str(" prose\n```json\n");
+        content.push_str(r#"{"verdict":"pass","findings":[]}"#);
+        content.push_str("\n``` trailing");
+        let parsed = parse_review(&content);
         assert!(parsed.is_ok());
         if let Ok(review) = parsed {
             assert_eq!(review.verdict, "pass");

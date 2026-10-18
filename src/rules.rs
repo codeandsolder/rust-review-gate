@@ -1,9 +1,29 @@
-use serde::Serialize;
+use std::collections::BTreeSet;
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+
+use crate::diff::ParsedDiff;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct ReviewRule {
     pub id: &'static str,
     pub summary: &'static str,
+}
+
+#[derive(Debug, Deserialize)]
+struct RulePack {
+    source_commit: String,
+    rule_count: usize,
+    rules: Vec<RustSkillRule>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RustSkillRule {
+    id: String,
+    category: String,
+    priority: String,
+    summary: String,
 }
 
 pub const REVIEW_RULES: &[ReviewRule] = &[
@@ -77,11 +97,278 @@ pub const REVIEW_RULES: &[ReviewRule] = &[
     },
 ];
 
-#[must_use]
-pub fn prompt_text() -> String {
-    REVIEW_RULES
+fn load_rulepack() -> Result<RulePack> {
+    let pack: RulePack = serde_json::from_str(include_str!("../rulepack/rust-skills2.json"))
+        .context("decode embedded rust-skills2 rulepack")?;
+    if pack.rule_count != pack.rules.len() {
+        anyhow::bail!(
+            "rust-skills2 rulepack count mismatch: declared {}, decoded {}",
+            pack.rule_count,
+            pack.rules.len()
+        );
+    }
+    Ok(pack)
+}
+
+pub fn known_rule_ids() -> Result<BTreeSet<String>> {
+    let pack = load_rulepack()?;
+    let mut ids = REVIEW_RULES
         .iter()
-        .map(|rule| format!("- {}: {}", rule.id, rule.summary))
+        .map(|rule| rule.id.to_owned())
+        .collect::<BTreeSet<_>>();
+    ids.extend(pack.rules.into_iter().map(|rule| rule.id));
+    Ok(ids)
+}
+
+pub fn prompt_text(diff: &ParsedDiff) -> Result<String> {
+    let pack = load_rulepack()?;
+
+    let prefixes = applicable_prefixes(diff);
+    let selected: Vec<_> = pack
+        .rules
+        .iter()
+        .filter(|rule| prefixes.iter().any(|prefix| rule.id.starts_with(prefix)))
+        .collect();
+
+    let mut sections = Vec::with_capacity(2);
+    sections.push(format!(
+        "sccache-derived project gates (cite these whenever they match):\n{}",
+        REVIEW_RULES
+            .iter()
+            .map(|rule| format!("- {}: {}", rule.id, rule.summary))
+            .collect::<Vec<_>>()
+            .join("\n")
+    ));
+    sections.push(format!(
+        "rust-skills2 snapshot {} — {} of {} rules selected deterministically for this diff:\n{}",
+        pack.source_commit,
+        selected.len(),
+        pack.rule_count,
+        selected
+            .iter()
+            .map(|rule| format!(
+                "- {} [{} / {}]: {}",
+                rule.id, rule.category, rule.priority, rule.summary
+            ))
+            .collect::<Vec<_>>()
+            .join("\n")
+    ));
+    Ok(sections.join("\n\n"))
+}
+
+const ADDED_RULE_TRIGGERS: &[(&[&str], &[&str])] = &[
+    (
+        &[
+            "result<",
+            "err(",
+            "error",
+            "anyhow",
+            "thiserror",
+            ".context(",
+            "map_err",
+            "?;",
+            ")?",
+            ".unwrap(",
+            ".expect(",
+            "panic!(",
+        ],
+        &["err-"],
+    ),
+    (
+        &[
+            "#[test]",
+            "assert!(",
+            "assert_eq!(",
+            "assert_ne!(",
+            "proptest",
+            "quickcheck",
+        ],
+        &["test-"],
+    ),
+    (
+        &[
+            "#[allow(",
+            "#[warn(",
+            "#[deny(",
+            "#[expect(",
+            "clippy::",
+            "rustflags",
+        ],
+        &["lint-"],
+    ),
+    (
+        &["unsafe", "*const", "*mut", "extern \"c\"", "no_mangle"],
+        &["unsafe-"],
+    ),
+    (
+        &[
+            "async ", ".await", "tokio", "spawn(", "mutex", "rwlock", "atomic", "channel", "mpsc",
+            "oneshot", "joinset",
+        ],
+        &["async-", "conc-"],
+    ),
+    (
+        &[
+            "pub ", "pub(", "trait ", "impl ", "struct ", "enum ", "where ",
+        ],
+        &["api-", "type-", "trait-", "conv-"],
+    ),
+    (
+        &[
+            "vec<",
+            "string",
+            "box<",
+            "arc<",
+            ".clone(",
+            ".collect(",
+            "capacity",
+            "alloc",
+            "cache",
+            "hot path",
+            "benchmark",
+        ],
+        &["mem-", "perf-", "opt-"],
+    ),
+    (
+        &[
+            "checked_",
+            "saturating_",
+            "wrapping_",
+            "overflow",
+            "usize",
+            "u64",
+            "i64",
+            " as u",
+            " as i",
+        ],
+        &["num-"],
+    ),
+    (&["serde", "serialize", "deserialize"], &["serde-"]),
+    (&["match ", "if let ", "matches!("], &["pat-"]),
+    (
+        &["macro_rules!", "proc_macro", "quote!", "syn::"],
+        &["macro-"],
+    ),
+    (&["fn ", "struct ", "enum ", "trait ", "const "], &["name-"]),
+    (
+        &[
+            "hashmap",
+            "hashset",
+            "btreemap",
+            "btreeset",
+            "vecdeque",
+            "binaryheap",
+        ],
+        &["coll-"],
+    ),
+    (&["const ", "static ", "const fn"], &["const-"]),
+    (
+        &[
+            "tracing", "log::", "debug!(", "info!(", "warn!(", "error!(", "metrics",
+        ],
+        &["obs-"],
+    ),
+    (&["///", "//! "], &["doc-"]),
+];
+
+const FILE_RULE_TRIGGERS: &[(&[&str], &[&str])] = &[
+    (&["readme", "docs/"], &["doc-"]),
+    (&["tests/", "_test.rs", "tests.rs"], &["test-"]),
+    (
+        &["clippy.toml", ".cargo/config", "rust-toolchain"],
+        &["lint-"],
+    ),
+    (
+        &[
+            "cargo.toml",
+            "cargo.lock",
+            "build.rs",
+            "rust-toolchain",
+            ".github/",
+        ],
+        &["proj-"],
+    ),
+];
+
+fn applicable_prefixes(diff: &ParsedDiff) -> BTreeSet<&'static str> {
+    let mut prefixes = BTreeSet::from(["own-", "anti-"]);
+    let added = diff
+        .added_lines
+        .iter()
+        .map(|line| line.text.as_str())
         .collect::<Vec<_>>()
         .join("\n")
+        .to_ascii_lowercase();
+    let files = diff
+        .files
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n")
+        .to_ascii_lowercase();
+
+    apply_triggers(&mut prefixes, &added, ADDED_RULE_TRIGGERS);
+    apply_triggers(&mut prefixes, &files, FILE_RULE_TRIGGERS);
+    prefixes
+}
+
+fn apply_triggers(
+    prefixes: &mut BTreeSet<&'static str>,
+    haystack: &str,
+    triggers: &'static [(&'static [&'static str], &'static [&'static str])],
+) {
+    for (needles, additions) in triggers {
+        if contains_any(haystack, needles) {
+            prefixes.extend(additions.iter().copied());
+        }
+    }
+}
+
+fn contains_any(haystack: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| haystack.contains(needle))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{applicable_prefixes, known_rule_ids, prompt_text};
+    use crate::diff::ParsedDiff;
+
+    #[test]
+    fn selects_core_rules_without_unrelated_error_or_lint_families() {
+        let diff = ParsedDiff::parse(
+            "diff --git a/src/lib.rs b/src/lib.rs\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-old\n+let value = left + right;\n",
+        );
+        let prefixes = applicable_prefixes(&diff);
+        assert!(prefixes.contains("own-"));
+        assert!(prefixes.contains("anti-"));
+        assert!(!prefixes.contains("err-"));
+        assert!(!prefixes.contains("lint-"));
+    }
+
+    #[test]
+    fn known_rules_include_project_and_vendored_ids() {
+        let ids = known_rule_ids();
+        assert!(ids.is_ok());
+        if let Ok(ids) = ids {
+            assert!(ids.contains("failure-path-semantics"));
+            assert!(ids.contains("unsafe-safety-comment"));
+        }
+    }
+
+    #[test]
+    fn selects_unsafe_and_async_rule_families() {
+        let diff = ParsedDiff::parse(
+            "diff --git a/src/lib.rs b/src/lib.rs\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1,3 @@\n-old\n+pub async unsafe fn changed() {\n+    work().await;\n+}\n",
+        );
+        let prefixes = applicable_prefixes(&diff);
+        assert!(prefixes.contains("unsafe-"));
+        assert!(prefixes.contains("async-"));
+        assert!(prefixes.contains("api-"));
+        let prompt = prompt_text(&diff);
+        assert!(prompt.is_ok());
+        if let Ok(prompt) = prompt {
+            assert!(prompt.contains("rust-skills2 snapshot"));
+            assert!(prompt.contains("unsafe-safety-comment"));
+        }
+    }
 }
