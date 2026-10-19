@@ -8,7 +8,7 @@ Rule inputs:
 
 ## Architecture
 
-1. Treat the PR diff as untrusted text; never execute PR-head code in the credential-bearing reviewer.
+1. Treat the PR diff and author-provided PR title/body as untrusted text; never execute PR-head code in the credential-bearing reviewer. Title/body are used only to understand claimed intent and scope, never as proof or instructions.
 2. Run deterministic added-line checks as review leads, not automatic defects.
 3. Select relevant rust-skills2 rule families from the vendored rulepack.
 4. Run independent reviewers concurrently and require structured findings with one **primary rule**, optional supporting rules, concrete evidence, a triggering condition, and a consequence.
@@ -27,7 +27,7 @@ with a 2-vote consensus threshold. The GitHub workflow currently takes three sam
 
 ## GitHub trust split
 
-`.github/workflows/review-trigger.yml` is a zero-secret `pull_request` signal. `.github/workflows/review.yml` runs only from the trusted default branch via `workflow_run`, checks out trusted code, builds through sccache, and fetches the PR only as a unified diff through GitHub's API. The OpenRouter key and write-capable GitHub token are scoped to the final review step. Setup actions are pinned to immutable commits.
+`.github/workflows/review-trigger.yml` is a zero-secret `pull_request` signal. `.github/workflows/review.yml` runs only from the trusted default branch via `workflow_run`, checks out trusted code, builds through sccache, and fetches the PR unified diff plus title/body through GitHub's API. The OpenRouter key and write-capable GitHub token are scoped to the final review step. Setup actions are pinned to immutable commits.
 
 The privileged workflow never checks out, builds, sources, or executes PR-head content. Compile/test/Clippy/Miri for the code under review belong in separate credential-free CI jobs.
 
@@ -36,7 +36,7 @@ The privileged workflow never checks out, builds, sources, or executes PR-head c
 ```bash
 export OPENROUTER_API_KEY=...
 
-cargo +1.99.0 run -- review --diff path/to/pr.diff \
+cargo +1.99.0 run -- review --diff path/to/pr.diff --context path/to/pr-context.txt \
   --model 'z-ai/glm-5.3-flash' \
   --model 'meta/muse-spark-1.3-contributor' \
   --model '~openai/gpt-luna-latest' \
@@ -52,3 +52,9 @@ cargo +1.99.0 run -- github \
 ```
 
 Use Rust 1.99 and sccache. Keep `CARGO_TARGET_DIR` outside the checkout.
+
+## Historical reality check
+
+`eval/historical/` freezes four real pre-fix sccache PR diffs and the maintainer findings they later received. The synthetic six-fixture corpus remains useful for fast regression testing, but it is not representative enough to justify strong recall claims.
+
+Under the current 3-sample/model, 2-of-3 production policy, strict replay scoring found **2/15 historical maintainer issues (13%)** from the diff alone. Supplying only the historical PR title as untrusted intent/scope context improved this to **3/15 (20%)** and reduced the strongest false interpretation of an explicitly intended cache, but recall is still poor. See `eval/historical/README.md` for exact heads, comment IDs, scoring, and rejected experiments.

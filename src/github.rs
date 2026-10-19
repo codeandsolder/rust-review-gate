@@ -27,10 +27,20 @@ pub async fn run(
     }
 
     let github = GithubClient::from_env()?;
-    let head_sha = github.pull_head_sha(repo, pull_number).await?;
+    let metadata = github.pull_metadata(repo, pull_number).await?;
+    let head_sha = metadata.head_sha.clone();
     let diff = github.pull_diff(repo, pull_number).await?;
+    let context = metadata.review_context();
     let parsed = ParsedDiff::parse(&diff);
-    let output = review::review_text(&diff, models, temperature, min_votes, samples).await?;
+    let output = review::review_text_with_context(
+        &diff,
+        Some(&context),
+        models,
+        temperature,
+        min_votes,
+        samples,
+    )
+    .await?;
     let successful_models = review::successful_model_count(&output.runs);
     if successful_models < min_votes {
         let failed = output
@@ -179,6 +189,30 @@ fn validate_repo(repo: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(Deserialize)]
+struct PullResponse {
+    head: PullHead,
+    title: String,
+    body: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct PullHead {
+    sha: String,
+}
+
+struct PullMetadata {
+    head_sha: String,
+    title: String,
+    body: String,
+}
+
+impl PullMetadata {
+    fn review_context(&self) -> String {
+        format!("PR title: {}\n\nPR description:\n{}", self.title, self.body)
+    }
+}
+
 struct GithubClient {
     http: Client,
     token: String,
@@ -211,16 +245,7 @@ impl GithubClient {
             .await
     }
 
-    async fn pull_head_sha(&self, repo: &str, pull_number: u64) -> Result<String> {
-        #[derive(Deserialize)]
-        struct Pull {
-            head: Head,
-        }
-        #[derive(Deserialize)]
-        struct Head {
-            sha: String,
-        }
-
+    async fn pull_metadata(&self, repo: &str, pull_number: u64) -> Result<PullMetadata> {
         let response = self
             .http
             .get(format!(
@@ -234,8 +259,17 @@ impl GithubClient {
         let status = response.status();
         let body = response.text().await?;
         ensure_success(status, &body, "fetch pull-request metadata")?;
-        let pull: Pull = serde_json::from_str(&body).context("decode pull-request metadata")?;
-        Ok(pull.head.sha)
+        let pull: PullResponse =
+            serde_json::from_str(&body).context("decode pull-request metadata")?;
+        Ok(PullMetadata {
+            head_sha: pull.head.sha,
+            title: pull.title,
+            body: pull.body.unwrap_or_default(),
+        })
+    }
+
+    async fn pull_head_sha(&self, repo: &str, pull_number: u64) -> Result<String> {
+        Ok(self.pull_metadata(repo, pull_number).await?.head_sha)
     }
 
     async fn post_review(&self, repo: &str, pull_number: u64, payload: &Value) -> Result<()> {

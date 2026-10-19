@@ -23,6 +23,8 @@ enum Command {
     Review {
         #[arg(long)]
         diff: PathBuf,
+        #[arg(long)]
+        context: Option<PathBuf>,
         #[arg(long = "model", required = true)]
         models: Vec<String>,
         #[arg(long, default_value_t = 0.10)]
@@ -70,10 +72,11 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Review {
             diff,
+            context,
             models,
             temperature,
             samples,
-        } => review::run(&diff, &models, temperature, samples).await,
+        } => review::run(&diff, context.as_deref(), &models, temperature, samples).await,
         Command::Preflight { diff } => review::preflight(&diff),
         Command::Bench {
             fixtures,

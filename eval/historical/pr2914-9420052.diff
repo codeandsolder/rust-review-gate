@@ -1,0 +1,423 @@
+diff --git a/src/cache/ipc_storage.rs b/src/cache/ipc_storage.rs
+index e6c6ecf6f..f782f5207 100644
+--- a/src/cache/ipc_storage.rs
++++ b/src/cache/ipc_storage.rs
+@@ -60,6 +60,11 @@ impl IpcStorage {
+         Arc::clone(&self.conn)
+     }
+ 
++    /// Return the access mode reported by the daemon during the handshake.
++    pub(crate) fn cache_mode(&self) -> CacheMode {
++        self.handshake.cache_mode
++    }
++
+     async fn rpc(&self, req: Request) -> Result<Response> {
+         let conn = Arc::clone(&self.conn);
+         tokio::task::spawn_blocking(move || conn.lock().unwrap().request(req))
+diff --git a/src/commands.rs b/src/commands.rs
+index 805827dd3..199aaf661 100644
+--- a/src/commands.rs
++++ b/src/commands.rs
+@@ -12,7 +12,7 @@
+ // See the License for the specific language governing permissions and
+ // limitations under the License.
+ 
+-use crate::cache::{IpcStorage, storage_from_config};
++use crate::cache::{CacheMode, IpcStorage, storage_from_config};
+ use crate::client::{ServerConnection, connect_to_server, connect_with_retry};
+ use crate::cmdline::{Command, StatsFormat};
+ use crate::compiler::{ColorMode, is_rmeta_artifact_notification};
+@@ -364,8 +364,7 @@ pub fn request_zero_stats(mut conn: ServerConnection) -> Result<()> {
+     }
+ }
+ 
+-/// Send a `GetStats` request to the server, and return the `ServerInfo` request if successful.
+-pub fn request_stats(mut conn: ServerConnection) -> Result<ServerInfo> {
++fn request_stats_on(conn: &mut ServerConnection) -> Result<ServerInfo> {
+     debug!("request_stats");
+     let response = conn.request(Request::GetStats).context(
+         "Failed to send data to or receive data from server. Mismatch of client/server versions?",
+@@ -377,6 +376,23 @@ pub fn request_stats(mut conn: ServerConnection) -> Result<ServerInfo> {
+     }
+ }
+ 
++/// Send a `GetStats` request to the server, and return the `ServerInfo` request if successful.
++pub fn request_stats(mut conn: ServerConnection) -> Result<ServerInfo> {
++    request_stats_on(&mut conn)
++}
++
++fn request_stats_with_cache_mode(mut conn: ServerConnection) -> Result<(ServerInfo, CacheMode)> {
++    let stats = request_stats_on(&mut conn)?;
++    let response = conn
++        .request(Request::StorageHandshake)
++        .context("failed to get effective cache mode from server")?;
++    let cache_mode = match response {
++        Response::StorageHandshake(info) => info.cache_mode,
++        _ => bail!("Unexpected server response!"),
++    };
++    Ok((stats, cache_mode))
++}
++
+ /// Send a `DistStatus` request to the server, and return `DistStatus` if successful.
+ pub fn request_dist_status(mut conn: ServerConnection) -> Result<DistInfo> {
+     debug!("request_dist_status");
+@@ -728,12 +744,14 @@ where
+     trace!("do_compile_client_side");
+     let exe_path = which_in(exe, path, cwd)?;
+     let storage = IpcStorage::connect(conn)?;
++    let cache_mode = storage.cache_mode();
+     let conn_arc = storage.conn();
+     let (tx, _rx) = futures::channel::mpsc::channel(1);
+     let (_, info) = server::WaitUntilZero::new();
+-    let service = server::SccacheService::<C>::new(
++    let service = server::SccacheService::<C>::new_with_cache_mode(
+         server::DistClientContainer::new_disabled(),
+         Arc::new(storage),
++        cache_mode,
+         jobserver,
+         runtime.handle().clone(),
+         tx,
+@@ -769,6 +787,19 @@ where
+ }
+ 
+ /// Run `cmd` and return the process exit status.
++#[derive(serde::Serialize)]
++struct StatsOutput<'a> {
++    #[serde(flatten)]
++    info: &'a ServerInfo,
++    effective_cache_mode: Option<CacheMode>,
++}
++
++fn empty_server_info(config: &Config) -> Result<ServerInfo> {
++    let runtime = new_client_runtime()?;
++    let storage = storage_from_config(config, runtime.handle()).ok();
++    runtime.block_on(ServerInfo::new(ServerStats::default(), storage.as_deref()))
++}
++
+ pub fn run_command(cmd: Command) -> Result<i32> {
+     // Config isn't required for all commands, but if it's broken then we should flag
+     // it early and loudly.
+@@ -778,19 +809,33 @@ pub fn run_command(cmd: Command) -> Result<i32> {
+     match cmd {
+         Command::ShowStats(fmt, advanced) => {
+             trace!("Command::ShowStats({:?})", fmt);
+-            let stats = match connect_to_server(&get_addr()) {
+-                Ok(srv) => request_stats(srv).context("failed to get stats from server")?,
+-                // If there is no server, spawning a new server would start with zero stats
+-                // anyways, so we can just return (mostly) empty stats directly.
+-                Err(_) => {
+-                    let runtime = new_client_runtime()?;
+-                    let storage = storage_from_config(config, runtime.handle()).ok();
+-                    runtime.block_on(ServerInfo::new(ServerStats::default(), storage.as_deref()))?
+-                }
+-            };
+             match fmt {
+-                StatsFormat::Text => stats.print(advanced),
+-                StatsFormat::Json => serde_json::to_writer(&mut io::stdout(), &stats)?,
++                StatsFormat::Text => {
++                    let stats = match connect_to_server(&get_addr()) {
++                        Ok(srv) => request_stats(srv).context("failed to get stats from server")?,
++                        // If there is no server, spawning a new server would start with zero stats
++                        // anyways, so we can just return (mostly) empty stats directly.
++                        Err(_) => empty_server_info(config)?,
++                    };
++                    stats.print(advanced);
++                }
++                StatsFormat::Json => {
++                    let (stats, effective_cache_mode) = match connect_to_server(&get_addr()) {
++                        Ok(srv) => {
++                            let (info, cache_mode) = request_stats_with_cache_mode(srv)
++                                .context("failed to get stats from server")?;
++                            (info, Some(cache_mode))
++                        }
++                        Err(_) => (empty_server_info(config)?, None),
++                    };
++                    serde_json::to_writer(
++                        &mut io::stdout(),
++                        &StatsOutput {
++                            info: &stats,
++                            effective_cache_mode,
++                        },
++                    )?;
++                }
+             }
+         }
+         Command::DebugPreprocessorCacheEntries => {
+@@ -1027,6 +1072,24 @@ mod test {
+             .unwrap()
+     }
+ 
++    #[test]
++    fn stats_output_serializes_effective_cache_mode() {
++        let runtime = make_runtime();
++        let info = runtime
++            .block_on(ServerInfo::new(ServerStats::default(), None))
++            .unwrap();
++        let output = serde_json::to_value(StatsOutput {
++            info: &info,
++            effective_cache_mode: Some(CacheMode::ReadOnly),
++        })
++        .unwrap();
++
++        assert_eq!(
++            output.get("effective_cache_mode"),
++            Some(&serde_json::Value::String("ReadOnly".to_owned()))
++        );
++    }
++
+     /// A `Connection` that immediately returns EOF on reads and discards writes.
+     /// Used to simulate a server that disconnects before sending `CompileFinished`.
+     struct DisconnectedConnection;
+diff --git a/src/server.rs b/src/server.rs
+index 3be898786..fb1c9ce26 100644
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -498,8 +498,14 @@ pub fn start_server(config: &Config, addr: &crate::net::SocketAddr) -> Result<()
+             crate::net::SocketAddr::Net(addr) => {
+                 trace!("binding TCP {addr}");
+                 let l = runtime.block_on(tokio::net::TcpListener::bind(addr))?;
+-                let srv =
+-                    SccacheServer::<_>::with_listener(l, runtime, client, dist_client, storage);
++                let srv = SccacheServer::<_>::with_listener_and_cache_mode(
++                    l,
++                    runtime,
++                    client,
++                    dist_client,
++                    storage,
++                    cache_mode,
++                );
+                 Ok((
+                     srv.local_addr().unwrap(),
+                     Box::new(move |f| srv.run(f)) as Box<dyn FnOnce(_) -> _>,
+@@ -514,8 +520,14 @@ pub fn start_server(config: &Config, addr: &crate::net::SocketAddr) -> Result<()
+                     let _guard = runtime.enter();
+                     tokio::net::UnixListener::bind(path)?
+                 };
+-                let srv =
+-                    SccacheServer::<_>::with_listener(l, runtime, client, dist_client, storage);
++                let srv = SccacheServer::<_>::with_listener_and_cache_mode(
++                    l,
++                    runtime,
++                    client,
++                    dist_client,
++                    storage,
++                    cache_mode,
++                );
+                 Ok((
+                     srv.local_addr().unwrap(),
+                     Box::new(move |f| srv.run(f)) as Box<dyn FnOnce(_) -> _>,
+@@ -531,8 +543,14 @@ pub fn start_server(config: &Config, addr: &crate::net::SocketAddr) -> Result<()
+                     let _guard = runtime.enter();
+                     tokio::net::UnixListener::from_std(l)?
+                 };
+-                let srv =
+-                    SccacheServer::<_>::with_listener(l, runtime, client, dist_client, storage);
++                let srv = SccacheServer::<_>::with_listener_and_cache_mode(
++                    l,
++                    runtime,
++                    client,
++                    dist_client,
++                    storage,
++                    cache_mode,
++                );
+                 Ok((
+                     srv.local_addr()
+                         .unwrap_or_else(|| crate::net::SocketAddr::UnixAbstract(p.clone())),
+@@ -609,13 +627,39 @@ impl<A: crate::net::Acceptor, C: CommandCreatorSync> SccacheServer<A, C> {
+         client: Client,
+         dist_client: DistClientContainer,
+         storage: Arc<dyn Storage>,
++    ) -> Self {
++        Self::with_listener_and_cache_mode(
++            listener,
++            runtime,
++            client,
++            dist_client,
++            storage,
++            CacheMode::ReadWrite,
++        )
++    }
++
++    fn with_listener_and_cache_mode(
++        listener: A,
++        runtime: Runtime,
++        client: Client,
++        dist_client: DistClientContainer,
++        storage: Arc<dyn Storage>,
++        cache_mode: CacheMode,
+     ) -> Self {
+         // Prepare the service which we'll use to service all incoming TCP
+         // connections.
+         let (tx, rx) = mpsc::channel(1);
+         let (wait, info) = WaitUntilZero::new();
+         let pool = runtime.handle().clone();
+-        let service = SccacheService::new(dist_client, storage, &client, pool, tx, info);
++        let service = SccacheService::new_with_cache_mode(
++            dist_client,
++            storage,
++            cache_mode,
++            &client,
++            pool,
++            tx,
++            info,
++        );
+ 
+         SccacheServer {
+             runtime,
+@@ -796,6 +840,9 @@ where
+     /// Cache storage.
+     storage: Arc<dyn Storage>,
+ 
++    /// Access mode selected during server startup, when constructed by the normal startup path.
++    effective_cache_mode: Option<CacheMode>,
++
+     /// A cache of known compiler info.
+     compilers: Arc<RwLock<CompilerMap<C>>>,
+ 
+@@ -917,7 +964,10 @@ where
+                         cache_type_name: me.storage.cache_type_name().to_owned(),
+                         basedirs: me.storage.basedirs().to_vec(),
+                         preprocessor_cache_mode_config: me.storage.preprocessor_cache_mode_config(),
+-                        cache_mode: me.storage.check().await.unwrap_or(CacheMode::ReadWrite),
++                        cache_mode: match me.effective_cache_mode {
++                            Some(cache_mode) => cache_mode,
++                            None => me.storage.check().await.unwrap_or(CacheMode::ReadWrite),
++                        },
+                         max_size: me.storage.max_size().await.unwrap_or(None),
+                     };
+                     Ok(Message::WithoutBody(Response::StorageHandshake(info)))
+@@ -1010,11 +1060,44 @@ where
+         rt: tokio::runtime::Handle,
+         tx: mpsc::Sender<ServerMessage>,
+         info: ActiveInfo,
++    ) -> SccacheService<C> {
++        Self::new_internal(dist_client, storage, None, client, rt, tx, info)
++    }
++
++    pub(crate) fn new_with_cache_mode(
++        dist_client: DistClientContainer,
++        storage: Arc<dyn Storage>,
++        effective_cache_mode: CacheMode,
++        client: &Client,
++        rt: tokio::runtime::Handle,
++        tx: mpsc::Sender<ServerMessage>,
++        info: ActiveInfo,
++    ) -> SccacheService<C> {
++        Self::new_internal(
++            dist_client,
++            storage,
++            Some(effective_cache_mode),
++            client,
++            rt,
++            tx,
++            info,
++        )
++    }
++
++    fn new_internal(
++        dist_client: DistClientContainer,
++        storage: Arc<dyn Storage>,
++        effective_cache_mode: Option<CacheMode>,
++        client: &Client,
++        rt: tokio::runtime::Handle,
++        tx: mpsc::Sender<ServerMessage>,
++        info: ActiveInfo,
+     ) -> SccacheService<C> {
+         SccacheService {
+             stats: Arc::default(),
+             dist_client: Arc::new(dist_client),
+             storage,
++            effective_cache_mode,
+             compilers: Arc::default(),
+             compiler_proxies: Arc::default(),
+             rt,
+@@ -1037,6 +1120,7 @@ where
+             stats: Arc::default(),
+             dist_client: Arc::new(dist_client),
+             storage,
++            effective_cache_mode: None,
+             compilers: Arc::default(),
+             compiler_proxies: Arc::default(),
+             rt,
+@@ -1073,6 +1157,7 @@ where
+                 dist_client,
+             ))),
+             storage,
++            effective_cache_mode: None,
+             compilers: Arc::default(),
+             compiler_proxies: Arc::default(),
+             rt: rt.clone(),
+@@ -2687,6 +2772,73 @@ mod tests {
+ 
+     type MockCreator = Arc<std::sync::Mutex<MockCommandCreator>>;
+ 
++    fn storage_handshake_cache_mode(
++        storage_mode: CacheMode,
++        installed_mode: Option<CacheMode>,
++    ) -> CacheMode {
++        use crate::cache::disk::DiskCache;
++        use crate::config::PreprocessorCacheModeConfig;
++
++        let fixture = TestFixture::new();
++        let runtime = Runtime::new().unwrap();
++        let storage = Arc::new(DiskCache::new(
++            fixture.tempdir.path().join("cache-mode"),
++            u64::MAX,
++            runtime.handle(),
++            PreprocessorCacheModeConfig::default(),
++            storage_mode,
++            vec![],
++        ));
++        let client = Client::new_num(1);
++        let (tx, _rx) = mpsc::channel(1);
++        let (_wait, info) = WaitUntilZero::new();
++        let service = match installed_mode {
++            Some(cache_mode) => SccacheService::<MockCreator>::new_with_cache_mode(
++                DistClientContainer::new_disabled(),
++                storage,
++                cache_mode,
++                &client,
++                runtime.handle().clone(),
++                tx,
++                info,
++            ),
++            None => SccacheService::<MockCreator>::new(
++                DistClientContainer::new_disabled(),
++                storage,
++                &client,
++                runtime.handle().clone(),
++                tx,
++                info,
++            ),
++        };
++        let request: SccacheRequest = Message::WithoutBody(Request::StorageHandshake);
++        let response = runtime
++            .block_on(Arc::new(service).call(request))
++            .unwrap()
++            .into_inner();
++
++        let Response::StorageHandshake(handshake) = response else {
++            panic!("unexpected response: {response:?}");
++        };
++        handshake.cache_mode
++    }
++
++    #[test]
++    fn legacy_service_constructor_preserves_storage_handshake_check() {
++        assert_eq!(
++            storage_handshake_cache_mode(CacheMode::ReadOnly, None),
++            CacheMode::ReadOnly
++        );
++    }
++
++    #[test]
++    fn storage_handshake_reports_installed_cache_mode() {
++        assert_eq!(
++            storage_handshake_cache_mode(CacheMode::ReadWrite, Some(CacheMode::ReadOnly)),
++            CacheMode::ReadOnly
++        );
++    }
++
+     fn mock_rustc_cache_miss(creator: &MockCreator, f: &TestFixture) {
+         // rustc -vV
+         next_command(

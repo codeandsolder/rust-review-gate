@@ -1,0 +1,132 @@
+diff --git a/src/commands.rs b/src/commands.rs
+index 805827dd3..17c48757c 100644
+--- a/src/commands.rs
++++ b/src/commands.rs
+@@ -584,6 +584,21 @@ where
+     )
+ }
+ 
++fn needs_lto_jobserver(cmdline: &[OsString]) -> bool {
++    let mut uses_lto = false;
++    for arg in cmdline.iter().filter_map(|arg| arg.to_str()) {
++        if matches!(arg, "-c" | "-S" | "-E") {
++            return false;
++        }
++        if arg == "-fno-lto" {
++            uses_lto = false;
++        } else if arg == "-flto" || arg.starts_with("-flto=") {
++            uses_lto = true;
++        }
++    }
++    uses_lto
++}
++
+ /// Dispatch the outcome of a compile, whether received from the daemon over IPC
+ /// or produced by a local `SccacheService` in client-side mode.
+ ///
+@@ -627,6 +642,9 @@ where
+ 
+     let mut cmd = creator.new_command_sync(exe);
+     cmd.args(&cmdline).current_dir(cwd);
++    if needs_lto_jobserver(&cmdline) {
++        cmd.share_jobserver();
++    }
+     if log_enabled!(Trace) {
+         trace!("running command: {:?}", cmd);
+     }
+@@ -1052,6 +1070,95 @@ mod test {
+         }
+     }
+ 
++    #[test]
++    fn lto_jobserver_detection_respects_link_mode_and_last_lto_option() {
++        assert!(needs_lto_jobserver(&[OsString::from("-flto")]));
++        assert!(needs_lto_jobserver(&[OsString::from("-flto=8")]));
++        assert!(needs_lto_jobserver(&[OsString::from("-flto=jobserver")]));
++        assert!(!needs_lto_jobserver(&[OsString::from("-fno-lto")]));
++        assert!(!needs_lto_jobserver(&[
++            OsString::from("-flto"),
++            OsString::from("-fno-lto"),
++        ]));
++        assert!(needs_lto_jobserver(&[
++            OsString::from("-fno-lto"),
++            OsString::from("-flto"),
++        ]));
++        assert!(!needs_lto_jobserver(&[
++            OsString::from("-flto"),
++            OsString::from("-c"),
++        ]));
++        assert!(!needs_lto_jobserver(&[
++            OsString::from("-flto=8"),
++            OsString::from("-S"),
++        ]));
++        assert!(!needs_lto_jobserver(&[
++            OsString::from("-flto"),
++            OsString::from("-E"),
++        ]));
++    }
++
++    #[test]
++    #[cfg(unix)]
++    fn lto_link_fallback_inherits_jobserver_but_compile_only_does_not() {
++        use std::os::unix::fs::PermissionsExt;
++
++        let tempdir = tempfile::tempdir().unwrap();
++        let script = tempdir.path().join("jobserver-probe.sh");
++        std::fs::write(
++            &script,
++            r#"#!/bin/sh
++if [ -n "$CARGO_MAKEFLAGS" ]; then exit 0; else exit 42; fi
++"#,
++        )
++        .unwrap();
++        let mut permissions = std::fs::metadata(&script).unwrap().permissions();
++        permissions.set_mode(0o755);
++        std::fs::set_permissions(&script, permissions).unwrap();
++
++        let client = Client::new_num(1);
++        let creator = <ProcessCommandCreator as CommandCreatorSync>::new(&client);
++        let mut runtime = make_runtime();
++        let mut stdout = Vec::new();
++        let mut stderr = Vec::new();
++
++        let link_code = handle_compile_result(
++            creator.clone(),
++            &mut runtime,
++            CompileResponse::UnhandledCompile,
++            None,
++            false,
++            &script,
++            vec![OsString::from("-flto")],
++            tempdir.path(),
++            &mut stdout,
++            &mut stderr,
++        )
++        .unwrap();
++        assert_eq!(
++            link_code, 0,
++            "LTO link fallback should inherit the jobserver"
++        );
++
++        let compile_only_code = handle_compile_result(
++            creator,
++            &mut runtime,
++            CompileResponse::UnhandledCompile,
++            None,
++            false,
++            &script,
++            vec![OsString::from("-flto"), OsString::from("-c")],
++            tempdir.path(),
++            &mut stdout,
++            &mut stderr,
++        )
++        .unwrap();
++        assert_eq!(
++            compile_only_code, 42,
++            "compile-only fallback should keep the jobserver private"
++        );
++    }
++
+     /// A mid-compile server disconnect: the server sends CompileStarted then drops the
+     /// connection before CompileFinished.  handle_compile_response must fall back to
+     /// local compilation rather than panic.

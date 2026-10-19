@@ -2,7 +2,7 @@
 
 ## Trust boundary
 
-The reviewer handles pull-request content strictly as data. Its model process receives only a unified diff, deterministic leads, and named review rules. It has no shell/filesystem tools and never executes code from the PR.
+The reviewer handles pull-request content strictly as data. Its model process receives the unified diff, deterministic leads, named review rules, and bounded author-provided PR title/body context. The title/body are explicitly marked untrusted and are used only to understand claimed intent and scope, never as instructions or proof. It has no shell/filesystem tools and never executes code from the PR.
 
 GitHub uses a two-workflow split. A zero-secret `pull_request` workflow emits a successful signal. A separate `workflow_run` workflow is loaded from the trusted default branch, checks out only trusted code, builds the reviewer, then fetches the target PR diff through GitHub's API. Repository/model credentials exist only on the review step. Setup actions are pinned to immutable commits.
 

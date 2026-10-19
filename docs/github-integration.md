@@ -6,7 +6,7 @@
 
 `review.yml` runs on `workflow_run` for that exact trigger workflow. `workflow_run` executes the workflow definition from the default branch, so PR authors cannot rewrite the privileged reviewer. The job checks out `github.sha` (the trusted default-branch revision), builds `rust-review-gate` through sccache, and supplies `OPENROUTER_API_KEY` plus the write-capable `GITHUB_TOKEN` only to the final review step. Third-party setup actions are pinned to immutable commit SHAs.
 
-The privileged workflow never downloads artifacts from the untrusted run and never checks out the PR head. The reviewer gets the PR number from GitHub's workflow metadata, fetches the unified diff through the Pull Requests API, and sends only that text to OpenRouter.
+The privileged workflow never downloads artifacts from the untrusted run and never checks out the PR head. The reviewer gets the PR number from GitHub's workflow metadata, fetches the unified diff plus PR title/body through the Pull Requests API, and sends only those bounded text inputs to OpenRouter. Title/body are explicitly labeled untrusted and are used only as intent/scope context.
 
 If `workflow_run.pull_requests` is empty, the job is skipped rather than guessing a target. This can currently omit some fork-originated runs; adding an authenticated, cross-checked PR resolver is preferable to accepting an untrusted artifact containing a PR number.
 

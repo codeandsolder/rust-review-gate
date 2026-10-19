@@ -1,0 +1,1 @@
+PR title: cache: avoid repeated multi-level capability checks

@@ -1,0 +1,155 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index f39f1e6b0..f145cc73d 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -738,9 +738,9 @@ checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
+ 
+ [[package]]
+ name = "crc32fast"
+-version = "1.3.2"
++version = "1.5.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b540bd8bc810d3885c6ea91e2018302f68baba2129ab3e88f32389ee9370880d"
++checksum = "01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78"
+ dependencies = [
+  "cfg-if 1.0.4",
+ ]
+@@ -2251,6 +2251,18 @@ dependencies = [
+  "libc",
+ ]
+ 
++[[package]]
++name = "nix"
++version = "0.31.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
++dependencies = [
++ "bitflags 2.13.1",
++ "cfg-if 1.0.4",
++ "cfg_aliases",
++ "libc",
++]
++
+ [[package]]
+ name = "normalize-line-endings"
+ version = "0.3.0"
+@@ -5489,13 +5501,15 @@ dependencies = [
+ 
+ [[package]]
+ name = "zip"
+-version = "0.6.6"
++version = "9.0.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "760394e246e4c28189f19d488c058bf16f564016aefac5d32bb1f3b51d5e9261"
++checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
+ dependencies = [
+- "byteorder",
+  "crc32fast",
+- "crossbeam-utils",
++ "indexmap",
++ "memchr",
++ "nix 0.31.3",
++ "typed-path",
+ ]
+ 
+ [[package]]
+diff --git a/Cargo.toml b/Cargo.toml
+index bd1bc5294..5be808c7c 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -120,7 +120,7 @@ uuid = { version = "1.9", features = ["v4"] }
+ walkdir = "2"
+ # by default which pulls in an outdated failure version
+ which = { version = "6", default-features = false }
+-zip = { version = "0.6", default-features = false }
++zip = { version = "9", default-features = false }
+ zstd = "0.13"
+ 
+ # dist-server only
+diff --git a/src/cache/cache_io.rs b/src/cache/cache_io.rs
+index e24bc42cc..37cc9f725 100644
+--- a/src/cache/cache_io.rs
++++ b/src/cache/cache_io.rs
+@@ -18,8 +18,9 @@ use std::fmt;
+ use std::io::{Cursor, Read, Seek, Write};
+ use std::path::{Path, PathBuf};
+ use tempfile::NamedTempFile;
+-use zip::write::FileOptions;
+-use zip::{CompressionMethod, ZipArchive, ZipWriter};
++use zip::read::{ArchiveOffset, Config as ZipReadConfig};
++use zip::write::SimpleFileOptions;
++use zip::{CompressionMethod, System, ZipArchive, ZipWriter};
+ 
+ /// Cache object sourced by a file.
+ #[derive(Clone)]
+@@ -93,7 +94,12 @@ impl CacheRead {
+     where
+         R: ReadSeek + 'static,
+     {
+-        let z = ZipArchive::new(Box::new(reader) as Box<dyn ReadSeek>)
++        // Cache entries are standalone ZIP archives written by CacheWrite, so the
++        // archive always starts at byte 0. Avoid zip's generic embedded-archive scan.
++        let config = ZipReadConfig {
++            archive_offset: ArchiveOffset::Known(0),
++        };
++        let z = ZipArchive::with_config(config, Box::new(reader) as Box<dyn ReadSeek>)
+             .context("Failed to parse cache entry")?;
+         Ok(CacheRead { zip: z })
+     }
+@@ -271,7 +277,11 @@ impl CacheWrite {
+     {
+         // We're going to declare the compression method as "stored",
+         // but we're actually going to store zstd-compressed blobs.
+-        let opts = FileOptions::default().compression_method(CompressionMethod::Stored);
++        // zip 0.6 wrote entries with Unix creator metadata on every platform.
++        // Preserve that cache format explicitly with zip 9.
++        let opts = SimpleFileOptions::default()
++            .compression_method(CompressionMethod::Stored)
++            .system(System::Unix);
+         let opts = if let Some(mode) = mode {
+             opts.unix_permissions(mode)
+         } else {
+@@ -307,7 +317,7 @@ impl CacheWrite {
+ 
+     /// Finish writing data to the cache entry writer, and return the data.
+     pub fn finish(self) -> Result<Vec<u8>> {
+-        let CacheWrite { mut zip } = self;
++        let CacheWrite { zip } = self;
+         let cur = zip.finish().context("Failed to finish cache entry zip")?;
+         Ok(cur.into_inner())
+     }
+@@ -323,6 +333,34 @@ impl Default for CacheWrite {
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn cache_entry_roundtrip_preserves_zip_format() {
++        let payload = b"cache payload";
++        let mut source = Cursor::new(payload);
++        let mut cache_write = CacheWrite::new();
++        cache_write
++            .put_object("object", &mut source, Some(0o755))
++            .unwrap();
++        let cache_bytes = cache_write.finish().unwrap();
++        assert_eq!(&cache_bytes[..4], b"PK\x03\x04");
++
++        {
++            let mut archive = ZipArchive::new(Cursor::new(cache_bytes.as_slice())).unwrap();
++            let file = archive.by_name("object").unwrap();
++            assert_eq!(file.compression(), CompressionMethod::Stored);
++            assert_eq!(file.unix_mode().unwrap() & 0o777, 0o755);
++        }
++
++        let mut cache_read = CacheRead::from(Cursor::new(cache_bytes)).unwrap();
++        let mut output = Vec::new();
++        let mode = cache_read
++            .get_object("object", &mut output)
++            .unwrap()
++            .unwrap();
++        assert_eq!(mode & 0o777, 0o755);
++        assert_eq!(output, payload);
++    }
++
+     #[cfg(unix)]
+     #[test]
+     fn test_extract_object_to_devnull_works() {
