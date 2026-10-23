@@ -58,3 +58,16 @@ Use Rust 1.99 and sccache. Keep `CARGO_TARGET_DIR` outside the checkout.
 `eval/historical/` freezes four real pre-fix sccache PR diffs and the maintainer findings they later received. The synthetic six-fixture corpus remains useful for fast regression testing, but it is not representative enough to justify strong recall claims.
 
 Under the current 3-sample/model, 2-of-3 production policy, strict replay scoring found **2/15 historical maintainer issues (13%)** from the diff alone. Supplying only the historical PR title as untrusted intent/scope context improved this to **3/15 (20%)** and reduced the strongest false interpretation of an explicitly intended cache, but recall is still poor. See `eval/historical/README.md` for exact heads, comment IDs, scoring, and rejected experiments.
+
+
+### Experimental single-model brute-force bench
+
+`bruteforce-bench` is an **experimental evaluation path**, not the production GitHub reviewer. It reconstructs full changed files for the frozen historical corpus, inserts inline diff markers, supplies a complete external rule corpus, primes one GLM request, then fans out 2-5 independent reviews before an optional 1-3 reducer stage.
+
+Example using the routed single-file rust-skills2 corpus:
+
+```bash
+cargo +1.99.0 run -- bruteforce-bench   --historical eval/historical   --full-rules /path/to/rust-skills2/REVIEW_SKILL_ROUTED.md   --output /tmp/bruteforce.json   --pr 2912 --order files-first   --review-count 3 --final-reducers 1 --skip-prefix-reducers
+```
+
+The harness checkpoints completed discovery reviews before synthesis, so a slow reducer cannot erase paid-for discovery output. The `555620d` experiment found that the routed compact corpus improves historical discovery recall, but the current same-model reducer over-prunes true findings; see `eval/historical/bruteforce-555620d.md` for the full comparison and cache/cost data.

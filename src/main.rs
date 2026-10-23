@@ -1,5 +1,6 @@
 mod aggregate;
 mod bench;
+mod bruteforce;
 mod diff;
 mod github;
 mod model;
@@ -48,6 +49,26 @@ enum Command {
         #[arg(long, default_value_t = 1)]
         samples: usize,
     },
+    BruteforceBench {
+        #[arg(long, default_value = "eval/historical")]
+        historical: PathBuf,
+        #[arg(long, default_value = "z-ai/glm-5.3-flash")]
+        model: String,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        full_rules: Option<PathBuf>,
+        #[arg(long = "pr")]
+        prs: Vec<u64>,
+        #[arg(long, default_value = "both")]
+        order: String,
+        #[arg(long, default_value_t = 5)]
+        review_count: usize,
+        #[arg(long, default_value_t = 3)]
+        final_reducers: usize,
+        #[arg(long)]
+        skip_prefix_reducers: bool,
+    },
     Github {
         #[arg(long)]
         repo: String,
@@ -85,6 +106,32 @@ async fn main() -> Result<()> {
             output,
             samples,
         } => bench::run(&fixtures, &models, temperature, output.as_deref(), samples).await,
+        Command::BruteforceBench {
+            historical,
+            model,
+            output,
+            full_rules,
+            prs,
+            order,
+            review_count,
+            final_reducers,
+            skip_prefix_reducers,
+        } => {
+            bruteforce::run(
+                &historical,
+                &model,
+                &output,
+                &prs,
+                full_rules.as_deref(),
+                &order,
+                bruteforce::BenchPlan {
+                    review_count,
+                    final_reducers,
+                    include_prefix_reducers: !skip_prefix_reducers,
+                },
+            )
+            .await
+        }
         Command::Github {
             repo,
             pull,

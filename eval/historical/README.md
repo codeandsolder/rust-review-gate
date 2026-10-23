@@ -39,6 +39,10 @@ Each replay supplies only the historical PR title as untrusted intent/scope cont
 
 PR context is therefore useful input, especially for distinguishing intended behavior from accidental regressions, but it is not a recall solution.
 
+## Single-model brute-force experiment
+
+The single-model full-context experiment using the compact rust-skills2 artifacts at `555620d` is documented in [`bruteforce-555620d.md`](./bruteforce-555620d.md). It compares complete vs routed rule representations, files-first vs rules-first context order, 2-5 discovery samples, reducer behavior, cache/cost, the raw-rule control, and a clean historical control.
+
 ## Rejected experiments
 
 - Eight samples/model on #2912 still produced zero consensus. GLM independently found the response-file hole, showing that raw rerolls improve discovery without solving agreement.
