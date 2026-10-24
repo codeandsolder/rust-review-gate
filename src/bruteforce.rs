@@ -24,6 +24,7 @@ pub struct BenchPlan {
     pub review_count: usize,
     pub final_reducers: usize,
     pub include_prefix_reducers: bool,
+    pub include_reasoning: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -32,6 +33,13 @@ struct HistoricalCase {
     head: String,
     diff: String,
     context: Option<String>,
+    maintainer_findings: Vec<HistoricalFinding>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HistoricalFinding {
+    comment_id: u64,
+    original_commit_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,6 +121,8 @@ struct CompletionRun {
     effort: String,
     elapsed_ms: u64,
     usage: Usage,
+    reasoning: Option<String>,
+    reasoning_details: Option<Value>,
     response: Value,
 }
 
@@ -153,16 +163,21 @@ struct BenchmarkOutput {
 struct OpenRouterClient {
     http: reqwest::Client,
     api_key: String,
+    include_reasoning: bool,
 }
 
 impl OpenRouterClient {
-    fn from_env() -> Result<Self> {
+    fn from_env(include_reasoning: bool) -> Result<Self> {
         let api_key = env::var("OPENROUTER_API_KEY").context("OPENROUTER_API_KEY is not set")?;
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(600))
             .user_agent("rust-review-gate/bruteforce-bench")
             .build()?;
-        Ok(Self { http, api_key })
+        Ok(Self {
+            http,
+            api_key,
+            include_reasoning,
+        })
     }
 
     async fn complete(&self, request: CompletionRequest<'_>) -> Result<CompletionRun> {
@@ -181,7 +196,8 @@ impl OpenRouterClient {
             "messages": messages,
             "temperature": TEMPERATURE,
             "max_tokens": MAX_OUTPUT_TOKENS,
-            "reasoning": {"effort": request.effort, "exclude": true},
+            "reasoning": {"effort": request.effort, "exclude": !self.include_reasoning},
+            "include_reasoning": self.include_reasoning,
             "response_format": {"type": "json_object"}
         });
 
@@ -239,6 +255,12 @@ fn completion_from_response(
         .ok_or_else(|| anyhow!("OpenRouter response missing message content: {value}"))?;
     let response = parse_json_object(content)?;
     let usage = value.get("usage");
+    let message = value.pointer("/choices/0/message");
+    let reasoning = message
+        .and_then(|v| v.get("reasoning"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    let reasoning_details = message.and_then(|v| v.get("reasoning_details")).cloned();
     Ok(CompletionRun {
         phase: request.phase.to_owned(),
         sample: request.sample,
@@ -267,6 +289,8 @@ fn completion_from_response(
                 .and_then(|v| v.get("cache_discount"))
                 .and_then(Value::as_f64),
         },
+        reasoning,
+        reasoning_details,
         response,
     })
 }
@@ -299,16 +323,17 @@ pub async fn run(
         &fs::read_to_string(historical_dir.join("manifest.json")).context("read manifest")?,
     )
     .context("decode historical manifest")?;
+    validate_manifest(&manifest)?;
     if !(2..=REVIEW_SPECS.len()).contains(&plan.review_count) {
         return Err(anyhow!(
             "review-count must be between 2 and {}",
             REVIEW_SPECS.len()
         ));
     }
-    if !(1..=3).contains(&plan.final_reducers) {
-        return Err(anyhow!("final-reducers must be between 1 and 3"));
+    if plan.final_reducers > 3 {
+        return Err(anyhow!("final-reducers must be between 0 and 3"));
     }
-    let client = OpenRouterClient::from_env()?;
+    let client = OpenRouterClient::from_env(plan.include_reasoning)?;
     let (rules_context, rules_mode) = all_rules_context(full_rules)?;
     let orders = match order_filter {
         "both" => ContextOrder::ALL.to_vec(),
@@ -379,6 +404,22 @@ pub async fn run(
             result.total_cost += reduction_cost;
             result.reductions = reductions;
             write_output(output, &benchmark)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_manifest(manifest: &[HistoricalCase]) -> Result<()> {
+    for case in manifest {
+        for finding in &case.maintainer_findings {
+            if finding.original_commit_id != case.head {
+                return Err(anyhow!(
+                    "historical comment {} belongs to original commit {}, not fixture head {}",
+                    finding.comment_id,
+                    finding.original_commit_id,
+                    case.head
+                ));
+            }
         }
     }
     Ok(())
@@ -471,6 +512,9 @@ async fn run_reductions(
     reviews: &[CompletionRun],
     plan: BenchPlan,
 ) -> Result<Vec<ReductionResult>> {
+    if plan.final_reducers == 0 {
+        return Ok(Vec::new());
+    }
     let mut reductions = Vec::new();
     let prefix_counts: &[usize] = if plan.include_prefix_reducers {
         &[2_usize, 3]
@@ -904,7 +948,7 @@ fn session_id(model: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{annotate_post_image, parse_new_start};
+    use super::{HistoricalCase, annotate_post_image, parse_new_start, validate_manifest};
 
     #[test]
     fn parses_hunk_start() -> anyhow::Result<()> {
@@ -921,5 +965,12 @@ mod tests {
         assert!(out.contains("+      2 | new"));
         assert!(out.contains("       4 | tail"));
         Ok(())
+    }
+
+    #[test]
+    fn historical_manifest_findings_match_fixture_revisions() -> anyhow::Result<()> {
+        let manifest: Vec<HistoricalCase> =
+            serde_json::from_str(include_str!("../eval/historical/manifest.json"))?;
+        validate_manifest(&manifest)
     }
 }

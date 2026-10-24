@@ -9,7 +9,8 @@ Raw model responses and stochastic run outputs are intentionally not committed. 
 The current cases cover:
 
 - #2910: partial helper migration, displayed-error cause loss, changed failed-probe/write semantics, neighboring-convention drift, and unrelated test churn.
-- #2912: doc-comment attachment, incomplete LTO classification, preserving the wrong jobserver boundary, and a regression test with the wrong oracle.
+- #2912 at `2a92bef…`: doc-comment attachment drift before that issue was fixed.
+- #2912 at `7360440…`: incomplete LTO classification, preserving the wrong jobserver boundary, and a regression test with the wrong oracle.
 - #2914: redundant mode plumbing, doc-comment attachment, duplicated connect/fallback paths, a behavior-changing hard-coded mode, and unnecessary internal compatibility machinery.
 - #2916: validation duplicated above the abstraction that already owns it.
 
@@ -19,11 +20,15 @@ Scoring is manual and deliberately strict: a maintainer finding counts only when
 
 ### Baseline: diff only, production 3 x 3 policy
 
-- #2910: 1/5 — caught the failed-check/write semantic regression.
-- #2912: 0/4.
-- #2914: 1/5 — caught the hard-coded `ReadWrite` handshake regression.
-- #2916: 0/1.
-- Total: **2/15 (13%)**.
+The original replay accidentally attributed review comment `4308066522` to the later `7360440…` #2912 head even though GitHub records its `original_commit_id` as `2a92bef…`; `7360440…` already contains the doc-comment fix. The historical revision is now a separate fixture. Existing production replay numbers below are therefore rescored only on the four snapshots actually tested, containing **14 aligned findings**.
+
+- #2910 `669e5a8…`: 1/5 — caught the failed-check/write semantic regression.
+- #2912 `7360440…`: 0/3.
+- #2914 `9420052…`: 1/5 — caught the hard-coded `ReadWrite` handshake regression.
+- #2916 `1ac9ec9…`: 0/1.
+- Aligned replay total: **2/14 (14%)**.
+
+The separate #2912 `2a92bef…` doc-attachment fixture is not retroactively included in this production score until the production ensemble is replayed against it.
 
 This is substantially worse than the synthetic six-fixture benchmark and is the more important reality check for future reviewer changes.
 
@@ -31,11 +36,13 @@ This is substantially worse than the synthetic six-fixture benchmark and is the 
 
 Each replay supplies only the historical PR title as untrusted intent/scope context. Current edited PR descriptions are deliberately excluded so later review fixes cannot leak into the benchmark.
 
-- #2910: 1/5 — retains the failed-check/write hit and suppresses the strongest false claim that persistent capability caching is itself a regression.
-- #2912: 0/4.
-- #2914: 2/5 — catches the hard-coded `ReadWrite` constructor divergence and the unnecessary optional-state/constructor compatibility machinery in one consensus finding.
-- #2916: 0/1.
-- Total: **3/15 (20%)**.
+- #2910 `669e5a8…`: 1/5 — retains the failed-check/write hit and suppresses the strongest false claim that persistent capability caching is itself a regression.
+- #2912 `7360440…`: 0/3.
+- #2914 `9420052…`: 2/5 — catches the hard-coded `ReadWrite` constructor divergence and the unnecessary optional-state/constructor compatibility machinery in one consensus finding.
+- #2916 `1ac9ec9…`: 0/1.
+- Aligned replay total: **3/14 (21%)**.
+
+Again, the earlier #2912 `2a92bef…` doc-attachment revision is a separate fixture and is not included in this already-completed ablation.
 
 PR context is therefore useful input, especially for distinguishing intended behavior from accidental regressions, but it is not a recall solution.
 

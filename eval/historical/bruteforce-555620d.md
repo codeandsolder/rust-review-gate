@@ -47,10 +47,10 @@ Discovery recall is the union of the independent review samples. Final recall is
 ### Compact complete corpus, files first, 3 discovery + 1 reducer
 
 - #2910: **1/5** discovery, **1/5** final — catches the failed capability-check/write semantic regression.
-- #2912: **0/4** discovery/final — repeatedly focuses on hypothetical rustc LTO flag coverage rather than the historical response-file/jobserver/test-oracle failures.
+- #2912 `7360440…`: **0/3** discovery/final — repeatedly focuses on hypothetical rustc LTO flag coverage rather than the historical response-file/jobserver/test-oracle failures.
 - #2914: **0/5** discovery/final.
 - #2916: **0/1** discovery/final.
-- Total: **1/15 (7%)** discovery and final recall.
+- Aligned four-snapshot total: **1/14 (7%)** discovery and final recall.
 - Final #2914 clean control: **pass**. Discovery proposed a mixed-version `StorageHandshake` compatibility concern, which the reducer rejected as unsupported by the same-binary deployment contract.
 
 The compact complete corpus is therefore smaller and operationally practical but substantially worse at selecting the important semantic review boundaries than the routed representation.
@@ -58,19 +58,21 @@ The compact complete corpus is therefore smaller and operationally practical but
 ### Routed corpus, files first, 3 discovery + 1 reducer
 
 - #2910: **1/5 discovery, 1/5 final** — failed capability-check/write semantics. Discovery also repeatedly proposes stale-mode/cache-refresh concerns; the reducer does not publish those as the primary result.
-- #2912: **2/4 discovery, 1/4 final** — discovery independently finds the `@response-file` LTO hole and the fact that the regression test observes `CARGO_MAKEFLAGS` rather than the real jobserver/fd consumer contract. The reducer keeps the response-file defect but silently drops the real-consumer/test-oracle finding, while adding a speculative rustc-LTO concern.
+- #2912 `7360440…`: **2/3 discovery, 1/3 final** — discovery independently finds the `@response-file` LTO hole and the fact that the regression test observes `CARGO_MAKEFLAGS` rather than the real jobserver/fd consumer contract. The reducer keeps the response-file defect but silently drops the real-consumer/test-oracle finding, while adding a speculative rustc-LTO concern.
 - #2914: **1/5 discovery, 0/5 final** — discovery notices the redundant `IpcStorage::cache_mode` accessor duplicates `Storage::check()`/`handshake.cache_mode`; reducer returns pass.
 - #2916: **0/1 discovery/final** — still misses the redundant validation already owned by `get_object`.
-- Total: **4/15 (27%) discovery recall**, collapsing to **2/15 (13%) final recall** after synthesis.
+- Aligned four-snapshot total: **4/14 (29%) discovery recall**, collapsing to **2/14 (14%) final recall** after synthesis.
 - Final #2914 clean control: **pass**. Two speculative discovery complaints are rejected by the reducer.
 
 This is the strongest result of the brute-force experiment so far: explicit generic routing conditions materially improve **discovery**, but the current same-model reducer over-prunes real findings and returns overall recall to roughly the old production baseline.
 
 ### Context order
 
-On #2912, routed **files first** is materially better for discovery than routed rules first. Files-first finds both the response-file hole and the real-consumer/test-oracle problem in independent samples. Rules-first mostly converges on generic environment sensitivity/non-UTF8 concerns and does not recover the response-file mechanism.
+The original #2912 comparison favored routed **files first**: that PR changes only one source file, and files-first found both the response-file hole and the real-consumer/test-oracle problem in independent samples. A later exposed-reasoning audit showed that this does **not** generalize to multi-file PRs.
 
-Rules-first remains interesting economically because the large rule prefix is identical across PRs, but the observed quality loss outweighs that advantage on this small historical stress case.
+With files first, the large routed corpus comes after the complete edited-file workspace and exact diff. On multi-file cases GLM behaves as though later source has disappeared: #2914 largely loses third-file `server.rs`, and #2916 even claims no relevant source was provided although `cache_io.rs` is present. Moving the same bytes to **rules first** puts edited source and the exact diff at the prompt tail and immediately restores visibility: #2910 recovers the displayed-error regression, #2914 recovers the hard-coded `ReadWrite` path, and #2916 correctly describes `cache_io.rs` and `get_object`.
+
+The working hypothesis is effective-attention / lost-in-the-middle behavior, not a hard context limit. The next layout should therefore be hybrid rather than a binary order choice: compact routed rules/gates first, hand-written edited files after them, generated/lock material later or summarized, and the exact unified diff at the absolute tail. A tiny always-on semantic-gate directory can be repeated after the diff if needed.
 
 ### Raw full handbook
 
@@ -91,16 +93,20 @@ The colder #2912 routed/files-first run cost about `$0.0215` with 62% cache reus
 
 ## Sample-count ablation
 
-- **2 routed/files-first samples:** **0/4** historical hits; both samples converged on a likely low-value `-flto=off` concern. Discovery completed in about 32-33 s/sample, but the single high reducer still had not completed after roughly 10.5 minutes and the run was terminated. The discovery checkpoint remains usable.
-- **3 samples (low, low, medium):** **2/4** discovery hits as above. This is the best practical point observed.
+- **2 routed/files-first samples on `7360440…`:** **0/3** historical hits; both samples converged on a likely low-value `-flto=off` concern. Discovery completed in about 32-33 s/sample, but the single high reducer still had not completed after roughly 10.5 minutes and the run was terminated. The discovery checkpoint remains usable.
+- **3 samples (low, low, medium):** **2/3** discovery hits on `7360440…` as above. This is the best practical point observed.
 - **5 samples (low, low, medium, high, high):** the first three samples completed in about 33-46 s each, but neither high-effort tail sample completed after roughly 10.5 minutes. The run was terminated rather than extending the ceiling. This configuration is operationally rejected even before considering reducer latency.
 
 The useful marginal budget is therefore discovery *breadth at low/medium effort*, not additional high-effort samples. The high-effort tail dominates wall-clock latency and can prevent a whole discovery batch from completing.
 
+## Evaluation correction discovered during trace analysis
+
+The first report treated #2912 review comment `4308066522` (doc-comment attachment) as ground truth for head `7360440…`. GitHub records `original_commit_id = 2a92bef…`, and the later `7360440…` source already has `needs_lto_jobserver` moved above the `handle_compile_result` doc comment. That apparent miss was therefore a correct abstention against a mismatched fixture. The corpus now contains `2a92bef…` as a separate snapshot. All legacy scores in this report are rescored on the **14 findings actually aligned with the four snapshots that were run**; the added earlier revision is not silently folded into those old results.
+
 ## Conclusions
 
 1. **Use the routed 555620d representation, not the plain compact corpus or raw handbook.** The explicit `WHEN` directory and always-applied semantic gates improve discovery on real maintainer examples.
-2. **Files before rules wins the observed quality comparison.** Rules-first may be cheaper across PRs, but #2912 loses the important boundary discoveries.
+2. **Do not use the original files-first layout as a global policy.** It works on the single-file #2912 case but exhibits severe later-file attention loss on multi-file PRs. Prefer a tail-anchored source/diff layout after the routed rule context.
 3. **Spend budget on discovery breadth before high reasoning.** Two samples are too few; three low/low/medium samples are substantially better. High samples are the latency tail.
-4. **The reducer is currently the main correctness bottleneck.** It is valuable for clean-control precision, but it drops true discoveries. Future synthesis work should require every candidate to be explicitly accepted or rejected with source evidence rather than allowing silent omission.
-5. **Do not replace the production gate with this yet.** Routed brute-force discovery is promising, but strict final historical recall is still only 2/15 with the current reducer.
+4. **The reducer is a correctness bottleneck, but not the only one.** It is valuable for clean-control precision yet silently drops true discoveries; trace analysis also found rule-grounding, routing, context-closure, and top-level objective failures. See `failure-layer-analysis-2026-10-24.md`.
+5. **Do not replace the production gate with this yet.** Routed brute-force discovery is promising, but strict final recall on the aligned four-snapshot subset is still only 2/14 with the current reducer.

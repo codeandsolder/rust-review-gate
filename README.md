@@ -53,11 +53,13 @@ cargo +1.99.0 run -- github \
 
 Use Rust 1.99 and sccache. Keep `CARGO_TARGET_DIR` outside the checkout.
 
+`bruteforce-bench` is an evaluation-only path. `--include-reasoning` asks OpenRouter to return provider-exposed reasoning and persists it in local benchmark JSON for diagnostics; normal runs exclude it. `--final-reducers 0` allows discovery-only trace capture. Raw reasoning traces are intentionally not committed.
+
 ## Historical reality check
 
 `eval/historical/` freezes four real pre-fix sccache PR diffs and the maintainer findings they later received. The synthetic six-fixture corpus remains useful for fast regression testing, but it is not representative enough to justify strong recall claims.
 
-Under the current 3-sample/model, 2-of-3 production policy, strict replay scoring found **2/15 historical maintainer issues (13%)** from the diff alone. Supplying only the historical PR title as untrusted intent/scope context improved this to **3/15 (20%)** and reduced the strongest false interpretation of an explicitly intended cache, but recall is still poor. See `eval/historical/README.md` for exact heads, comment IDs, scoring, and rejected experiments.
+Under the current 3-sample/model, 2-of-3 production policy, the original four-snapshot replay must be scored against **14 revision-aligned findings**, not 15: one #2912 doc-comment review belonged to an earlier head and is now a separate fixture. The aligned production replay found **2/14 (14%)** from diff-only input and **3/14 (21%)** with historical PR-title context. The separate earlier #2912 doc-attachment snapshot is not retroactively mixed into those completed runs. See `eval/historical/README.md` for provenance and `eval/historical/failure-layer-analysis-2026-10-24.md` for exposed-reasoning diagnosis.
 
 
 ### Experimental single-model brute-force bench

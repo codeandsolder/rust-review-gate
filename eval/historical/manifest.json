@@ -7,30 +7,49 @@
       {
         "comment_id": 4306210085,
         "rule": "helper-complete-migration",
-        "summary": "record_write_result migration omitted equivalent L0 and async slow-write stats bookkeeping"
+        "summary": "record_write_result migration omitted equivalent L0 and async slow-write stats bookkeeping",
+        "original_commit_id": "669e5a861725921d948835ea0166e3946a7e498a"
       },
       {
         "comment_id": 4306210337,
         "rule": "displayed-error",
-        "summary": "new error text loses the underlying cause at the actual Display/log site"
+        "summary": "new error text loses the underlying cause at the actual Display/log site",
+        "original_commit_id": "669e5a861725921d948835ea0166e3946a7e498a"
       },
       {
         "comment_id": 4306210420,
         "rule": "analogous-semantics",
-        "summary": "duration conversion diverges from neighboring as-u64 convention"
+        "summary": "duration conversion diverges from neighboring as-u64 convention",
+        "original_commit_id": "669e5a861725921d948835ea0166e3946a7e498a"
       },
       {
         "comment_id": 4306210584,
         "rule": "failure-path-semantics",
-        "summary": "failed capability check now prevents an L0 write and is retried on every later write"
+        "summary": "failed capability check now prevents an L0 write and is retried on every later write",
+        "original_commit_id": "669e5a861725921d948835ea0166e3946a7e498a"
       },
       {
         "comment_id": 4306210910,
         "rule": "scope-discipline",
-        "summary": "unrelated existing-test refactor should not be in this PR"
+        "summary": "unrelated existing-test refactor should not be in this PR",
+        "original_commit_id": "669e5a861725921d948835ea0166e3946a7e498a"
       }
     ],
     "context": "pr2910.context.txt"
+  },
+  {
+    "pr": 2912,
+    "head": "2a92befa44a88386c991b8bc589b2a8418d1496b",
+    "diff": "pr2912-2a92bef.diff",
+    "maintainer_findings": [
+      {
+        "comment_id": 4308066522,
+        "rule": "doc-attachment",
+        "summary": "inserted helper steals handle_compile_result doc comment",
+        "original_commit_id": "2a92befa44a88386c991b8bc589b2a8418d1496b"
+      }
+    ],
+    "context": "pr2912.context.txt"
   },
   {
     "pr": 2912,
@@ -38,24 +57,22 @@
     "diff": "pr2912-7360440.diff",
     "maintainer_findings": [
       {
-        "comment_id": 4308066522,
-        "rule": "doc-attachment",
-        "summary": "inserted helper steals handle_compile_result doc comment"
-      },
-      {
         "comment_id": 4308420923,
         "rule": "boundary-tests",
-        "summary": "visible -flto classification misses object-metadata LTO and response files"
+        "summary": "visible -flto classification misses object-metadata LTO and response files",
+        "original_commit_id": "73604403f3185e43aeb906c86eb91ca89e0ee67e"
       },
       {
         "comment_id": 4308421198,
         "rule": "invariant-owner",
-        "summary": "fix preserves CARGO_MAKEFLAGS while spawned compiler consumes MAKEFLAGS/jobserver state"
+        "summary": "fix preserves CARGO_MAKEFLAGS while spawned compiler consumes MAKEFLAGS/jobserver state",
+        "original_commit_id": "73604403f3185e43aeb906c86eb91ca89e0ee67e"
       },
       {
         "comment_id": 4308421390,
         "rule": "boundary-tests",
-        "summary": "regression probe checks CARGO_MAKEFLAGS rather than what GCC actually reads"
+        "summary": "regression probe checks CARGO_MAKEFLAGS rather than what GCC actually reads",
+        "original_commit_id": "73604403f3185e43aeb906c86eb91ca89e0ee67e"
       }
     ],
     "context": "pr2912.context.txt"
@@ -68,27 +85,32 @@
       {
         "comment_id": 4306214447,
         "rule": "scope-discipline",
-        "summary": "new cache_mode accessor/path is redundant because IpcStorage check already returns handshake mode"
+        "summary": "new cache_mode accessor/path is redundant because IpcStorage check already returns handshake mode",
+        "original_commit_id": "94200522638387ec5b80b4e4ca0f9c07e66ace85"
       },
       {
         "comment_id": 4306214728,
         "rule": "doc-attachment",
-        "summary": "run_command doc comment is attached to StatsOutput after structural edit"
+        "summary": "run_command doc comment is attached to StatsOutput after structural edit",
+        "original_commit_id": "94200522638387ec5b80b4e4ca0f9c07e66ace85"
       },
       {
         "comment_id": 4306215003,
         "rule": "helper-complete-migration",
-        "summary": "text and JSON stats duplicate connect/fallback logic instead of one path"
+        "summary": "text and JSON stats duplicate connect/fallback logic instead of one path",
+        "original_commit_id": "94200522638387ec5b80b4e4ca0f9c07e66ace85"
       },
       {
         "comment_id": 4306215301,
         "rule": "api-contract",
-        "summary": "hard-coded ReadWrite changes handshake probing and contradicts claimed legacy behavior"
+        "summary": "hard-coded ReadWrite changes handshake probing and contradicts claimed legacy behavior",
+        "original_commit_id": "94200522638387ec5b80b4e4ca0f9c07e66ace85"
       },
       {
         "comment_id": 4306215709,
         "rule": "internal-compatibility",
-        "summary": "three constructors plus Option preserve unnecessary internal/test-only compatibility"
+        "summary": "three constructors plus Option preserve unnecessary internal/test-only compatibility",
+        "original_commit_id": "94200522638387ec5b80b4e4ca0f9c07e66ace85"
       }
     ],
     "context": "pr2914.context.txt"
@@ -101,7 +123,8 @@
       {
         "comment_id": 4306212002,
         "rule": "invariant-owner",
-        "summary": "new validation block is redundant with get_object below, which already rejects non-Stored and returns mode"
+        "summary": "new validation block is redundant with get_object below, which already rejects non-Stored and returns mode",
+        "original_commit_id": "1ac9ec93b65af0575f0dce5b9545007affc5f125"
       }
     ],
     "context": "pr2916.context.txt"

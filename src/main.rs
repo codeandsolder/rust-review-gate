@@ -68,6 +68,8 @@ enum Command {
         final_reducers: usize,
         #[arg(long)]
         skip_prefix_reducers: bool,
+        #[arg(long)]
+        include_reasoning: bool,
     },
     Github {
         #[arg(long)]
@@ -116,6 +118,7 @@ async fn main() -> Result<()> {
             review_count,
             final_reducers,
             skip_prefix_reducers,
+            include_reasoning,
         } => {
             bruteforce::run(
                 &historical,
@@ -128,6 +131,7 @@ async fn main() -> Result<()> {
                     review_count,
                     final_reducers,
                     include_prefix_reducers: !skip_prefix_reducers,
+                    include_reasoning,
                 },
             )
             .await
