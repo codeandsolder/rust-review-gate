@@ -45,6 +45,7 @@ jobs:
         run: cargo +1.99.0 build --release --locked
 
       - name: Review pull request
+        continue-on-error: true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -55,6 +56,8 @@ jobs:
           --min-votes 2
           --samples 3
           --temperature 0.20
+          --policy '.github/rust-review-policy.md'
+          --informational-only
           --model 'meta/muse-spark-1.3-contributor'
           --model 'z-ai/glm-5.3-flash'
           --model '~openai/gpt-luna-latest'

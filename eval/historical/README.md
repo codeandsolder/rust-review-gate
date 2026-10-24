@@ -50,6 +50,8 @@ PR context is therefore useful input, especially for distinguishing intended beh
 
 The single-model full-context experiment using the compact rust-skills2 artifacts at `555620d` is documented in [`bruteforce-555620d.md`](./bruteforce-555620d.md). It compares complete vs routed rule representations, files-first vs rules-first context order, 2-5 discovery samples, reducer behavior, cache/cost, the raw-rule control, and a clean historical control.
 
+Follow-up experiments are documented in [`context-closure-cost-2026-10-24.md`](./context-closure-cost-2026-10-24.md) for one-hop called-function context cost and [`free-model-output-protocols-2026-10-24.md`](./free-model-output-protocols-2026-10-24.md) for native-schema/tool/prompt fallback behavior across the current free-model catalog.
+
 ## Rejected experiments
 
 - Eight samples/model on #2912 still produced zero consensus. GLM independently found the response-file hole, showing that raw rerolls improve discovery without solving agreement.

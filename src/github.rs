@@ -1,4 +1,4 @@
-use std::{env, fmt::Write as _, time::Duration};
+use std::{env, fmt::Write as _, fs, path::Path, time::Duration};
 
 use anyhow::{Context, Result, anyhow};
 use reqwest::{Client, StatusCode, header};
@@ -9,40 +9,57 @@ use crate::{diff::ParsedDiff, review};
 
 const MAX_INLINE_COMMENTS: usize = 50;
 
-pub async fn run(
-    repo: &str,
-    pull_number: u64,
-    models: &[String],
-    min_votes: usize,
-    temperature: f32,
-    dry_run: bool,
-    samples: usize,
-) -> Result<()> {
-    validate_repo(repo)?;
-    if min_votes == 0 || min_votes > models.len() {
+pub struct GithubOptions<'a> {
+    pub repo: &'a str,
+    pub pull_number: u64,
+    pub models: &'a [String],
+    pub min_votes: usize,
+    pub temperature: f32,
+    pub dry_run: bool,
+    pub samples: usize,
+    pub policy_path: Option<&'a Path>,
+    pub informational_only: bool,
+}
+
+pub async fn run(options: GithubOptions<'_>) -> Result<()> {
+    validate_repo(options.repo)?;
+    if options.min_votes == 0 || options.min_votes > options.models.len() {
         return Err(anyhow!(
             "min-votes must be between 1 and the model count ({})",
-            models.len()
+            options.models.len()
         ));
     }
 
+    let trusted_policy = options
+        .policy_path
+        .map(fs::read_to_string)
+        .transpose()
+        .with_context(|| {
+            options.policy_path.map_or_else(
+                || "read trusted repository review policy".to_owned(),
+                |path| format!("read trusted repository review policy {}", path.display()),
+            )
+        })?;
     let github = GithubClient::from_env()?;
-    let metadata = github.pull_metadata(repo, pull_number).await?;
+    let metadata = github
+        .pull_metadata(options.repo, options.pull_number)
+        .await?;
     let head_sha = metadata.head_sha.clone();
-    let diff = github.pull_diff(repo, pull_number).await?;
+    let diff = github.pull_diff(options.repo, options.pull_number).await?;
     let context = metadata.review_context();
     let parsed = ParsedDiff::parse(&diff);
-    let output = review::review_text_with_context(
+    let output = review::review_text_with_context_and_policy(
         &diff,
         Some(&context),
-        models,
-        temperature,
-        min_votes,
-        samples,
+        trusted_policy.as_deref(),
+        options.models,
+        options.temperature,
+        options.min_votes,
+        options.samples,
     )
     .await?;
     let successful_models = review::successful_model_count(&output.runs);
-    if successful_models < min_votes {
+    if successful_models < options.min_votes {
         let failed = output
             .failures
             .iter()
@@ -50,30 +67,34 @@ pub async fn run(
             .collect::<Vec<_>>()
             .join(", ");
         return Err(anyhow!(
-            "only {successful_models} distinct reviewer model(s) succeeded, below min-votes {min_votes}; failed samples: {failed}"
+            "only {successful_models} distinct reviewer model(s) succeeded, below min-votes {}; failed samples: {failed}",
+            options.min_votes
         ));
     }
-    let current_head_sha = github.pull_head_sha(repo, pull_number).await?;
+    let current_head_sha = github
+        .pull_head_sha(options.repo, options.pull_number)
+        .await?;
     if current_head_sha != head_sha {
         return Err(anyhow!(
             "pull-request head changed during review ({head_sha} -> {current_head_sha}); discarding stale findings"
         ));
     }
 
-    let (payload, blocking) = build_review_payload(&output, &parsed, &head_sha)?;
+    let (payload, blocking) =
+        build_review_payload(&output, &parsed, &head_sha, options.informational_only)?;
 
-    if dry_run {
+    if options.dry_run {
         println!("{}", serde_json::to_string_pretty(&payload)?);
     } else if !output.consensus.is_empty() {
         github
-            .post_review(repo, pull_number, &payload)
+            .post_review(options.repo, options.pull_number, &payload)
             .await
             .context("post GitHub pull-request review")?;
     } else {
         eprintln!("no consensus findings; skipping empty PR comment");
     }
 
-    if blocking > 0 {
+    if blocking > 0 && !options.informational_only {
         return Err(anyhow!(
             "{blocking} blocking/major consensus finding(s) remain"
         ));
@@ -85,6 +106,7 @@ fn build_review_payload(
     output: &review::ReviewOutput,
     parsed: &ParsedDiff,
     head_sha: &str,
+    informational_only: bool,
 ) -> Result<(Value, usize)> {
     let mut inline = Vec::new();
     let mut summary_only = Vec::new();
@@ -114,8 +136,13 @@ fn build_review_payload(
         .filter(|finding| matches!(finding.severity.as_str(), "block" | "major"))
         .count();
     let successful_models = review::successful_model_count(&output.runs);
+    let mode = if informational_only {
+        "informational only; findings do not gate this PR"
+    } else {
+        "gating mode"
+    };
     let mut body = format!(
-        "rust-review-gate: {} consensus finding(s) from {} successful model(s), {} successful sample(s); {} blocking/major.",
+        "rust-review-gate: {} consensus finding(s) from {} successful model(s), {} successful sample(s); {} blocking/major; {mode}.",
         output.consensus.len(),
         successful_models,
         output.runs.len(),
