@@ -177,8 +177,8 @@ async fn main() -> Result<()> {
                     } else {
                         bruteforce::TemperatureMode::Fixed
                     },
-                    output_protocol: bruteforce::OutputProtocol::parse(&output_protocol)?,
-                    schema_position: bruteforce::SchemaPosition::parse(&schema_position)?,
+                    output_protocol: output_protocol.parse()?,
+                    schema_position: schema_position.parse()?,
                 },
             )
             .await
