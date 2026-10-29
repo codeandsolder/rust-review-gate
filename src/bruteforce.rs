@@ -39,8 +39,10 @@ pub enum OutputProtocol {
     PromptJson,
 }
 
-impl OutputProtocol {
-    pub fn parse(value: &str) -> Result<Self> {
+impl std::str::FromStr for OutputProtocol {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self> {
         match value {
             "strict" => Ok(Self::StrictJsonSchema),
             "tool" => Ok(Self::ToolForced),
@@ -49,7 +51,9 @@ impl OutputProtocol {
             other => Err(anyhow!("unknown output protocol {other:?}")),
         }
     }
+}
 
+impl OutputProtocol {
     const fn uses_tools(self) -> bool {
         matches!(self, Self::ToolForced | Self::ToolAuto)
     }
@@ -62,8 +66,10 @@ pub enum SchemaPosition {
     Both,
 }
 
-impl SchemaPosition {
-    pub fn parse(value: &str) -> Result<Self> {
+impl std::str::FromStr for SchemaPosition {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self> {
         match value {
             "early" => Ok(Self::Early),
             "late" => Ok(Self::Late),
