@@ -1,11 +1,4 @@
-mod aggregate;
-mod bench;
-mod bruteforce;
-mod diff;
-mod github;
-mod model;
-mod review;
-mod rules;
+use rust_review_gate::{bench, bruteforce, github, review};
 
 use std::path::PathBuf;
 
