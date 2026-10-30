@@ -57,6 +57,11 @@ struct ModelScore {
     errors: Vec<String>,
 }
 
+/// Run the benchmark fixtures for each requested model.
+///
+/// # Errors
+/// Returns an error when the sample count is invalid, fixture/model setup fails,
+/// results cannot be serialized, or the optional output cannot be written.
 pub async fn run(
     fixtures_dir: &Path,
     models: &[String],

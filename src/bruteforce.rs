@@ -761,6 +761,11 @@ fn parse_json_object(content: &str) -> Result<Value> {
     ))
 }
 
+/// Run the historical-review benchmark matrix.
+///
+/// # Errors
+/// Returns an error when benchmark inputs or the manifest are invalid, required
+/// files cannot be read, model requests fail, or benchmark output cannot be written.
 pub async fn run(
     historical_dir: &Path,
     model: &str,
@@ -1367,8 +1372,8 @@ async fn build_files_context(
             .with_context(|| format!("annotate {}", patch.path))?;
         write!(
             &mut out,
-            "## FILE: {}\n```text\n{}\n```\n\n",
-            patch.path, annotated
+            "## FILE: {}\n```text\n{annotated}\n```\n\n",
+            patch.path
         )?;
     }
     out.push_str("## EXACT UNIFIED DIFF\n```diff\n");

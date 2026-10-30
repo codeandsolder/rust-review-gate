@@ -37,6 +37,11 @@ pub struct ReviewOutput {
     pub consensus: Vec<ConsensusFinding>,
 }
 
+/// Review a diff file and print the structured review output.
+///
+/// # Errors
+/// Returns an error when the diff/context cannot be read, review execution fails,
+/// or the output cannot be serialized.
 pub async fn run(
     diff_path: &Path,
     context_path: Option<&Path>,
@@ -70,6 +75,10 @@ pub async fn run(
 }
 
 #[cfg(test)]
+/// Review diff text without additional context.
+///
+/// # Errors
+/// Returns any error produced while building or executing the review.
 pub async fn review_text(
     text: &str,
     models: &[String],
@@ -80,6 +89,10 @@ pub async fn review_text(
     review_text_with_context(text, None, models, temperature, min_votes, samples).await
 }
 
+/// Review diff text with optional author-provided context.
+///
+/// # Errors
+/// Returns any error produced while building or executing the review.
 pub async fn review_text_with_context(
     text: &str,
     context: Option<&str>,
@@ -100,6 +113,11 @@ pub async fn review_text_with_context(
     .await
 }
 
+/// Review diff text with optional author context and trusted repository policy.
+///
+/// # Errors
+/// Returns an error for an invalid sample count, prompt/rule construction failure,
+/// model-client setup failure, or failed reviewer task.
 pub async fn review_text_with_context_and_policy(
     text: &str,
     context: Option<&str>,
@@ -205,6 +223,10 @@ fn normalize_subject(subject: &mut Option<String>) {
     *subject = Some(normalized.to_owned());
 }
 
+/// Print deterministic preflight leads for a diff file.
+///
+/// # Errors
+/// Returns an error when the diff cannot be read or the leads cannot be serialized.
 pub fn preflight(diff_path: &Path) -> Result<()> {
     let text = fs::read_to_string(diff_path)
         .with_context(|| format!("read diff {}", diff_path.display()))?;
@@ -216,11 +238,19 @@ pub fn preflight(diff_path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Build a review prompt without optional context or repository policy.
+///
+/// # Errors
+/// Returns an error when prompt construction or rule rendering fails.
 pub fn build_prompt(parsed: &ParsedDiff, leads: &[PreflightLead]) -> Result<String> {
     build_prompt_with_context_and_policy(parsed, leads, None, None)
 }
 
 #[cfg(test)]
+/// Build a review prompt with optional author context.
+///
+/// # Errors
+/// Returns an error when prompt construction or rule rendering fails.
 pub fn build_prompt_with_context(
     parsed: &ParsedDiff,
     leads: &[PreflightLead],
@@ -229,6 +259,11 @@ pub fn build_prompt_with_context(
     build_prompt_with_context_and_policy(parsed, leads, context, None)
 }
 
+/// Build the bounded review prompt with optional author context and trusted policy.
+///
+/// # Errors
+/// Returns an error when the diff exceeds the safe limit, deterministic leads cannot
+/// be serialized, or the selected rule text cannot be rendered.
 pub fn build_prompt_with_context_and_policy(
     parsed: &ParsedDiff,
     leads: &[PreflightLead],
@@ -243,6 +278,7 @@ pub fn build_prompt_with_context_and_policy(
     }
     let diff = parsed.text.as_str();
     let leads_json = serde_json::to_string_pretty(leads)?;
+    let rules = rules::prompt_text(parsed)?;
     let change_context = context.map_or_else(
         || "No author change context supplied.".to_owned(),
         |value| value.chars().take(MAX_CONTEXT_CHARS).collect(),
@@ -308,16 +344,12 @@ Requirements:
 - For relational findings such as helper-complete-migration, use the new/shared helper or abstraction identifier as subject even when anchoring the finding to a sibling path left behind.
 
 Deterministic added-line leads:
-{leads}
+{leads_json}
 
 Unified diff:
 ```diff
 {diff}
 ```"#,
-        rules = rules::prompt_text(parsed)?,
-        leads = leads_json,
-        change_context = change_context,
-        trusted_policy = trusted_policy,
     ))
 }
 

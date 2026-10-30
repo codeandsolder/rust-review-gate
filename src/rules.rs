@@ -112,6 +112,10 @@ fn load_rulepack() -> Result<RulePack> {
     Ok(pack)
 }
 
+/// Return every rule identifier accepted in model findings.
+///
+/// # Errors
+/// Returns an error when the embedded rust-skills2 rulepack is invalid or internally inconsistent.
 pub fn known_rule_ids() -> Result<BTreeSet<String>> {
     let pack = load_rulepack()?;
     let mut ids = REVIEW_RULES
@@ -122,6 +126,10 @@ pub fn known_rule_ids() -> Result<BTreeSet<String>> {
     Ok(ids)
 }
 
+/// Render the deterministic rule subset applicable to a parsed diff.
+///
+/// # Errors
+/// Returns an error when the embedded rust-skills2 rulepack is invalid or internally inconsistent.
 pub fn prompt_text(diff: &ParsedDiff) -> Result<String> {
     let pack = load_rulepack()?;
 
