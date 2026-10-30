@@ -57,6 +57,11 @@ pub struct ModelClient {
 }
 
 impl ModelClient {
+    /// Build a model client from the process environment.
+    ///
+    /// # Errors
+    /// Returns an error when `OPENROUTER_API_KEY` is missing or the HTTP client
+    /// cannot be constructed.
     pub fn from_env() -> Result<Self> {
         let api_key = env::var("OPENROUTER_API_KEY").context("OPENROUTER_API_KEY is not set")?;
         let http = reqwest::Client::builder()

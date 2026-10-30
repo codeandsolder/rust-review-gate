@@ -21,6 +21,11 @@ pub struct GithubOptions<'a> {
     pub informational_only: bool,
 }
 
+/// Review a GitHub pull request and optionally publish the resulting review.
+///
+/// # Errors
+/// Returns an error for invalid options, unavailable policy or GitHub data, reviewer
+/// failures that prevent consensus, publication failures, or blocking findings in gating mode.
 pub async fn run(options: GithubOptions<'_>) -> Result<()> {
     validate_repo(options.repo)?;
     if options.min_votes == 0 || options.min_votes > options.models.len() {
@@ -142,11 +147,9 @@ fn build_review_payload(
         "gating mode"
     };
     let mut body = format!(
-        "rust-review-gate: {} consensus finding(s) from {} successful model(s), {} successful sample(s); {} blocking/major; {mode}.",
+        "rust-review-gate: {} consensus finding(s) from {successful_models} successful model(s), {} successful sample(s); {blocking} blocking/major; {mode}.",
         output.consensus.len(),
-        successful_models,
-        output.runs.len(),
-        blocking
+        output.runs.len()
     );
     if !output.failures.is_empty() {
         body.push_str("\n\nReviewer failures (excluded from consensus):\n");
