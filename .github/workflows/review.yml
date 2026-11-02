@@ -30,7 +30,7 @@ jobs:
       # workflow_run executes the default-branch workflow. Checkout remains
       # trusted; PR code is fetched only as diff text and is never executed.
       - name: Check out trusted reviewer
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
