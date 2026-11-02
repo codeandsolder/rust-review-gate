@@ -39,7 +39,7 @@ jobs:
         run: rustup toolchain install 1.99.0 --profile minimal --no-self-update
 
       - name: Configure sccache
-        uses: mozilla-actions/sccache-action@fd02668681acd5f960e1372061bee5e3e987195c # v0.0.11
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
 
       - name: Build trusted reviewer
         run: cargo +1.99.0 build --release --locked
