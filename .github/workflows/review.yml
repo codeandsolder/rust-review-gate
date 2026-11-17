@@ -37,7 +37,7 @@ jobs:
         run: rustup toolchain install 1.99.0 --profile minimal --no-self-update
 
       - name: Setup mandatory sccache
-        uses: codeandsolder/ci-workflows/.github/actions/setup-sccache@a79d5260eee1f40d6499e04c6f7999effe071831 # main
+        uses: codeandsolder/ci-workflows/.github/actions/setup-sccache@77dd7bb7dcbb8450e335bbbd1c47591733dc79a4 # main
         with:
           rust-toolchain: "1.99.0"
 
@@ -64,4 +64,4 @@ jobs:
 
       - name: Finalize mandatory sccache
         if: always()
-        uses: codeandsolder/ci-workflows/.github/actions/finalize-sccache@a79d5260eee1f40d6499e04c6f7999effe071831 # main
+        uses: codeandsolder/ci-workflows/.github/actions/finalize-sccache@77dd7bb7dcbb8450e335bbbd1c47591733dc79a4 # main
