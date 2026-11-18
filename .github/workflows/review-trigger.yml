@@ -6,6 +6,11 @@ on:
 
 permissions: {}
 
+# Cancel superseded PR revisions while preserving independent event types.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   signal:
     if: github.event.pull_request.draft == false
