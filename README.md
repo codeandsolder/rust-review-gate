@@ -36,13 +36,13 @@ The privileged workflow never checks out, builds, sources, or executes PR-head c
 ```bash
 export OPENROUTER_API_KEY=...
 
-cargo +1.99.0 run -- review --diff path/to/pr.diff --context path/to/pr-context.txt \
+cargo run -- review --diff path/to/pr.diff --context path/to/pr-context.txt \
   --model 'z-ai/glm-5.3-flash' \
   --model 'meta/muse-spark-1.3-contributor' \
   --model '~openai/gpt-luna-latest' \
   --samples 3 --temperature 0.20
 
-cargo +1.99.0 run -- github \
+cargo run -- github \
   --repo owner/repo --pull 123 --min-votes 2 \
   --model 'z-ai/glm-5.3-flash' \
   --model 'meta/muse-spark-1.3-contributor' \
@@ -71,7 +71,7 @@ Under the current 3-sample/model, 2-of-3 production policy, the original four-sn
 Example using the routed single-file rust-skills2 corpus:
 
 ```bash
-cargo +1.99.0 run -- bruteforce-bench   --historical eval/historical   --full-rules /path/to/rust-skills2/REVIEW_SKILL_ROUTED.md   --output /tmp/bruteforce.json   --pr 2912 --order files-first   --review-count 3 --final-reducers 1 --skip-prefix-reducers
+cargo run -- bruteforce-bench   --historical eval/historical   --full-rules /path/to/rust-skills2/REVIEW_SKILL_ROUTED.md   --output /tmp/bruteforce.json   --pr 2912 --order files-first   --review-count 3 --final-reducers 1 --skip-prefix-reducers
 ```
 
 The harness checkpoints completed discovery reviews before synthesis, so a slow reducer cannot erase paid-for discovery output. The `555620d` experiment found that the routed compact corpus improves historical discovery recall, but the current same-model reducer over-prunes true findings; see `eval/historical/bruteforce-555620d.md` for the full comparison and cache/cost data.

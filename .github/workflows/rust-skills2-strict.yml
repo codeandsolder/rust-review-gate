@@ -14,4 +14,12 @@ permissions:
 
 jobs:
   strict-rust:
-    uses: codeandsolder/rust-skills2/.github/workflows/strict-rust.yml@3e700b97d5dc72ee78c43107b8098da3b4ad3e40 # main
+    uses: codeandsolder/rust-skills2/.github/workflows/strict-rust.yml@55ac92efe89656b085a0210b8cec4f1431d96406 # main
+
+  tests:
+    name: Native nightly tests
+    uses: codeandsolder/ci-workflows/.github/workflows/rust-sccache.yml@ce8f8a2849c8cc0ce221e4cb283a4bef0de4a01a # main
+    with:
+      command: |
+        cargo test --locked --workspace --all-features
+        cargo build --locked --release

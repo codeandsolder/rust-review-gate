@@ -36,7 +36,7 @@ struct Cluster {
     representative: Finding,
 }
 
-#[must_use]
+#[must_use = "the returned consensus identifies findings supported by the required votes"]
 pub fn consensus(
     runs: &[ModelRun],
     min_votes: usize,
