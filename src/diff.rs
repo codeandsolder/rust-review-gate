@@ -17,7 +17,7 @@ pub struct ParsedDiff {
 }
 
 impl ParsedDiff {
-    #[must_use]
+    #[must_use = "the returned diff index describes the changed files and added lines"]
     pub fn parse(text: &str) -> Self {
         let mut files = BTreeSet::new();
         let mut added_lines = Vec::new();
@@ -58,7 +58,7 @@ impl ParsedDiff {
         }
     }
 
-    #[must_use]
+    #[must_use = "the returned line identifies a valid location for a review finding"]
     pub fn nearest_added_line(&self, file: &str, target: u32, max_distance: u32) -> Option<u32> {
         self.added_lines
             .iter()

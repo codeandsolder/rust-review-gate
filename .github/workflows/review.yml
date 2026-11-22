@@ -33,16 +33,20 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Install Rust 1.99
-        run: rustup toolchain install 1.99.0 --profile minimal --no-self-update
+      - name: Resolve native quarantined Rust
+        id: compiler
+        uses: codeandsolder/ci-workflows/.github/actions/resolve-rust-toolchain@ce8f8a2849c8cc0ce221e4cb283a4bef0de4a01a # main
+
+      - name: Install Rust
+        run: rustup toolchain install "${{ steps.compiler.outputs.channel }}" --profile minimal --no-self-update
 
       - name: Setup mandatory sccache
-        uses: codeandsolder/ci-workflows/.github/actions/setup-sccache@097cc824fc551bce6708700117f796c746689faa # main
+        uses: codeandsolder/ci-workflows/.github/actions/setup-sccache@ce8f8a2849c8cc0ce221e4cb283a4bef0de4a01a # main
         with:
-          rust-toolchain: "1.99.0"
+          rust-toolchain: "${{ steps.compiler.outputs.channel }}"
 
       - name: Build trusted reviewer
-        run: cargo +1.99.0 build --release --locked
+        run: cargo build --release --locked
 
       - name: Review pull request
         continue-on-error: true
@@ -64,4 +68,4 @@ jobs:
 
       - name: Finalize mandatory sccache
         if: always()
-        uses: codeandsolder/ci-workflows/.github/actions/finalize-sccache@097cc824fc551bce6708700117f796c746689faa # main
+        uses: codeandsolder/ci-workflows/.github/actions/finalize-sccache@ce8f8a2849c8cc0ce221e4cb283a4bef0de4a01a # main

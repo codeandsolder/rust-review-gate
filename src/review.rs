@@ -200,7 +200,7 @@ pub async fn review_text_with_context_and_policy(
     })
 }
 
-#[must_use]
+#[must_use = "the returned count determines the number of independent successful reviewers"]
 pub fn successful_model_count(runs: &[ModelRun]) -> usize {
     runs.iter()
         .map(|run| run.model.as_str())
@@ -353,7 +353,7 @@ Unified diff:
     ))
 }
 
-#[must_use]
+#[must_use = "the returned leads identify deterministic preflight findings"]
 pub fn scan_added_lines(lines: &[AddedLine]) -> Vec<PreflightLead> {
     let checks: &[(&str, &str)] = &[
         (".unwrap(", "new-unwrap"),
