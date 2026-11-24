@@ -35,13 +35,13 @@ jobs:
 
       - name: Resolve native quarantined Rust
         id: compiler
-        uses: codeandsolder/ci-workflows/.github/actions/resolve-rust-toolchain@d3d509b57a06e72885a83ae743a4014e97cd9f95 # main
+        uses: codeandsolder/ci-workflows/.github/actions/resolve-rust-toolchain@b98983b02b52780f44951e725381b03ea2b57bdb # main
 
       - name: Install Rust
         run: rustup toolchain install "${{ steps.compiler.outputs.channel }}" --profile minimal --no-self-update
 
       - name: Setup mandatory sccache
-        uses: codeandsolder/ci-workflows/.github/actions/setup-sccache@d3d509b57a06e72885a83ae743a4014e97cd9f95 # main
+        uses: codeandsolder/ci-workflows/.github/actions/setup-sccache@b98983b02b52780f44951e725381b03ea2b57bdb # main
         with:
           rust-toolchain: "${{ steps.compiler.outputs.channel }}"
 
@@ -68,4 +68,4 @@ jobs:
 
       - name: Finalize mandatory sccache
         if: always()
-        uses: codeandsolder/ci-workflows/.github/actions/finalize-sccache@d3d509b57a06e72885a83ae743a4014e97cd9f95 # main
+        uses: codeandsolder/ci-workflows/.github/actions/finalize-sccache@b98983b02b52780f44951e725381b03ea2b57bdb # main
