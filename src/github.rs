@@ -1,9 +1,9 @@
 use std::{env, fmt::Write as _, fs, path::Path, time::Duration};
 
 use anyhow::{Context, Result, anyhow};
-use reqwest::{Client, StatusCode, header};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use wreq::{Client, StatusCode, header};
 
 use crate::{diff::ParsedDiff, review};
 
@@ -254,6 +254,7 @@ impl GithubClient {
             .or_else(|_| env::var("GH_TOKEN"))
             .context("neither GITHUB_TOKEN nor GH_TOKEN is set")?;
         let http = Client::builder()
+            .redirect(wreq::redirect::Policy::limited(10))
             .timeout(Duration::from_secs(45))
             .user_agent("rust-review-gate/0.1")
             .build()?;
@@ -319,7 +320,7 @@ impl GithubClient {
         ensure_success(status, &body, "post pull-request review")
     }
 
-    async fn text_response(&self, response: reqwest::Response, operation: &str) -> Result<String> {
+    async fn text_response(&self, response: wreq::Response, operation: &str) -> Result<String> {
         let status = response.status();
         let body = response.text().await?;
         ensure_success(status, &body, operation)?;

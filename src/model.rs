@@ -5,10 +5,10 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::{task::JoinSet, time::sleep};
+use wreq::StatusCode;
 
 pub const MAX_SAMPLES: usize = 16;
 
@@ -52,7 +52,7 @@ pub struct ModelRun {
 
 #[derive(Clone)]
 pub struct ModelClient {
-    http: reqwest::Client,
+    http: wreq::Client,
     api_key: String,
 }
 
@@ -64,7 +64,8 @@ impl ModelClient {
     /// cannot be constructed.
     pub fn from_env() -> Result<Self> {
         let api_key = env::var("OPENROUTER_API_KEY").context("OPENROUTER_API_KEY is not set")?;
-        let http = reqwest::Client::builder()
+        let http = wreq::Client::builder()
+            .redirect(wreq::redirect::Policy::limited(10))
             .timeout(Duration::from_secs(180))
             .user_agent("rust-review-gate/0.1")
             .build()?;

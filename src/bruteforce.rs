@@ -8,10 +8,10 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::{task::JoinSet, time::sleep};
+use wreq::StatusCode;
 
 use crate::rules::REVIEW_RULES;
 
@@ -234,7 +234,7 @@ struct BenchmarkOutput {
 
 #[derive(Clone)]
 struct OpenRouterClient {
-    http: reqwest::Client,
+    http: wreq::Client,
     api_key: String,
     reasoning_mode: ReasoningMode,
     temperature_mode: TemperatureMode,
@@ -253,7 +253,8 @@ impl OpenRouterClient {
         request_timeout_secs: u64,
     ) -> Result<Self> {
         let api_key = env::var("OPENROUTER_API_KEY").context("OPENROUTER_API_KEY is not set")?;
-        let http = reqwest::Client::builder()
+        let http = wreq::Client::builder()
+            .redirect(wreq::redirect::Policy::limited(10))
             .timeout(Duration::from_secs(request_timeout_secs))
             .user_agent("rust-review-gate/bruteforce-bench")
             .build()?;
@@ -1345,7 +1346,7 @@ fn all_rules_context(
 }
 
 async fn build_files_context(
-    http: &reqwest::Client,
+    http: &wreq::Client,
     case: &HistoricalCase,
     diff: &str,
     title_context: &str,
